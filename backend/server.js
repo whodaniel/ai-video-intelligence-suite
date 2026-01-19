@@ -4,6 +4,11 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -67,13 +72,13 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'AI Video Intelligence Suite Backend is running',
-    docs: '/api'
-  });
-});
+// Serve static files from the public directory
+const publicPath = path.join(__dirname, '../public');
+app.use(express.static(publicPath));
+
+// Root endpoint serves index.html via express.static, but we can verify
+// Or we can leave this specific handler if we want to confirm backend is running at /api/health
+console.log(`📂 Serving static files from: ${publicPath}`);
 
 // API routes
 app.use('/api/auth', authRoutes);
