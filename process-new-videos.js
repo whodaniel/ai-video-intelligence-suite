@@ -14,8 +14,10 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const LIBRARY_FILE = '/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/ai_video_library.html';
-const REPORTS_DIR = '/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports';
+const config = require('./lib/config');
+
+const LIBRARY_FILE = config.libraryFile;
+const REPORTS_DIR = config.reportsDir;
 // API key check removed - not needed for analysis-only mode
 
 // Keywords that indicate political content (to filter out)
@@ -147,9 +149,8 @@ function generateProcessingInstructions(videos) {
 
   console.log('─'.repeat(70));
   console.log('\n🚀 TO PROCESS THESE VIDEOS:\n');
-  console.log('Option 1: Use DirectAPIProcessor (recommended)');
-  console.log('   cd /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/packages/gemini-browser-skill');
-  console.log('   node src/DirectAPIProcessor.js\n');
+  console.log('   Option 1: Use DirectAPIProcessor (recommended)');
+  console.log('   Run: node src/DirectAPIProcessor.js\n');
 
   console.log('Option 2: Use Gemini Personal Intelligence (for videos without transcripts)');
   console.log('   See: MISSING-VIDEOS-FOR-GEMINI.md\n');

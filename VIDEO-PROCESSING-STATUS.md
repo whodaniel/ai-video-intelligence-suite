@@ -73,7 +73,7 @@ ps aux | grep "DirectAPIProcessor" | grep -v grep
 
 **Reports Directory:**
 ```
-/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports/
+/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/video-reports/
 ```
 
 **File Naming:**

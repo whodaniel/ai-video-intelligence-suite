@@ -120,7 +120,7 @@ const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-
 ## 📁 Output Summary
 
 ### Reports Generated
-**Location:** `/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports/`
+**Location:** `/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/video-reports/`
 
 **File naming:**
 - `api_${index}_${videoId}.md` (new reports)

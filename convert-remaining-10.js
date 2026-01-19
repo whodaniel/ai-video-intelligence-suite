@@ -7,7 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const REPORTS_DIR = '/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports';
+const config = require('./lib/config');
+
+const REPORTS_DIR = config.reportsDir;
 
 const videos = [
   {

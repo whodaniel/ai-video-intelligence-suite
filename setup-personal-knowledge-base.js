@@ -28,12 +28,14 @@ function question(prompt) {
   return new Promise(resolve => rl.question(prompt, resolve));
 }
 
+const os = require('os');
+
 // Default locations
 const DEFAULT_LOCATIONS = {
-  personalDataDir: '/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base',
-  tnfDataDir: '/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports',
-  tnfLibrary: '/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/ai_video_library.html',
-  consolidatedKB: '/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/consolidated_ai_knowledge.md'
+  personalDataDir: path.join(os.homedir(), 'Desktop', 'A1-Inter-LLM-Com', 'my-ai-knowledge-base'),
+  tnfDataDir: path.join(os.homedir(), 'Desktop', 'A1-Inter-LLM-Com', 'my-ai-knowledge-base', 'video-reports'),
+  tnfLibrary: path.join(os.homedir(), 'Desktop', 'A1-Inter-LLM-Com', 'my-ai-knowledge-base', 'video-library', 'ai_video_library.html'),
+  consolidatedKB: path.join(os.homedir(), 'Desktop', 'A1-Inter-LLM-Com', 'my-ai-knowledge-base', 'consolidated_ai_knowledge.md')
 };
 
 class PersonalKnowledgeBaseSetup {

@@ -57,8 +57,8 @@ consolidated_ai_knowledge.md
 **Next Step:**
 Move personal data to The New Fuse:
 ```bash
-mkdir -p /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-library
-mv ai_video_library.html /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-library/
+mkdir -p /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/video-library
+mv ai_video_library.html /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/video-library/
 # ... (see INTEGRATION-PLAN.md for full migration)
 ```
 
@@ -329,8 +329,8 @@ open /Users/danielgoldberg/Projects/ai-studio-automator/INTEGRATION-PLAN.md
 ### Option C: Move Personal Data to TNF
 ```bash
 # Create TNF data structure
-mkdir -p /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-library
-mkdir -p /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports
+mkdir -p /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/video-library
+mkdir -p /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/video-reports
 
 # Move personal files (after backup!)
 # ... (see INTEGRATION-PLAN.md Section 1)

@@ -167,7 +167,7 @@ cat data/ProcessingStatusReport.md
 ### Reports Location
 ```bash
 # CLI tool reports
-/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports/
+/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/video-reports/
 
 # Extension reports
 ~/Downloads/Report_*.md

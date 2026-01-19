@@ -11,8 +11,10 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const RECENT_VIDEOS_FILE = 'recent-videos.json';
-const LIBRARY_FILE = '/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/ai_video_library.html';
-const REPORTS_DIR = '/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports';
+const config = require('./lib/config');
+
+const LIBRARY_FILE = config.libraryFile;
+const REPORTS_DIR = config.reportsDir;
 
 function extractVideoId(url) {
   const match = url.match(/v=([^&]+)/);
@@ -120,7 +122,7 @@ function main() {
     });
 
     console.log('🚀 To process these videos:');
-    console.log('   cd /Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/packages/gemini-browser-skill');
+    console.log('   Run: node src/DirectAPIProcessor.js');
     console.log('   node src/DirectAPIProcessor.js\n');
   }
 

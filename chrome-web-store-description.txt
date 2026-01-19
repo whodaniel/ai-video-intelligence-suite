@@ -1,0 +1,185 @@
+=== AI VIDEO INTELLIGENCE SUITE ===
+
+Transform YouTube Videos into AI-Powered Insights in Seconds
+
+Process 20 videos FREE per day with Google's Gemini AI. Build your personal knowledge base from any YouTube video.
+
+🎯 WHAT IT DOES
+
+AI Video Intelligence Suite automatically analyzes YouTube videos and generates structured reports containing:
+• Key points and main takeaways
+• Technical concepts and frameworks mentioned
+• Timestamped visual context flags
+• Tools and technologies referenced
+• Actionable insights and summaries
+
+Perfect for:
+📚 Researchers building knowledge bases
+🎓 Students learning from video content
+💼 Content creators analyzing trends
+🔬 Developers staying current with tech
+📊 Analysts extracting insights from video data
+
+⚡ KEY FEATURES
+
+FREE TIER:
+• Process 20 YouTube videos per day
+• AI-powered video analysis using Gemini
+• Structured markdown reports
+• Multi-select videos from playlists
+• Smart filtering (duration, watched status)
+• Progress tracking and logs
+• Export reports locally
+
+PRO TIER ($9.99/month):
+• Unlimited video processing
+• 3 concurrent processes (3x faster)
+• Custom AI prompts (50 templates)
+• NotebookLM integration
+• Podcast generation (5 per month)
+• Personal knowledge base browser
+• Topic extraction & organization
+• Cloud sync across devices
+• Auto-download reports
+• Advanced retry logic
+• Priority support
+
+THE NEW FUSE TIER ($49/month):
+• Everything in Pro
+• The New Fuse Chrome extension
+• 10 concurrent processes
+• Unlimited custom prompts
+• Unlimited podcast generation
+• API access for automation
+• RAG semantic search
+• Personal AI assistant trained on your videos
+• Agent integration
+• Knowledge base as agent memory
+• Team collaboration
+• White-label options
+• Dedicated support
+
+🚀 HOW IT WORKS
+
+1. Install the extension and sign in with Google
+2. Browse your YouTube playlists or Watch Later
+3. Select videos you want to analyze
+4. Click "Process" and let AI do the work
+5. Review structured insights and reports
+6. Build your searchable knowledge base
+
+⏱️ SAVE TIME
+
+Instead of watching hours of video content:
+• Get key insights in seconds
+• Search your video knowledge base
+• Find specific topics instantly
+• Extract actionable information
+• Build organized learning resources
+
+🔒 PRIVACY & SECURITY
+
+• Your data is encrypted and private
+• We don't sell your information
+• YouTube tokens encrypted at rest
+• GDPR & CCPA compliant
+• Open source friendly
+
+📊 PERFECT FOR
+
+• Building AI learning resources from YouTube tutorials
+• Extracting insights from conference talks
+• Creating searchable video knowledge bases
+• Researching topics across multiple videos
+• Generating podcast content from video libraries
+• Staying current with fast-moving tech topics
+
+🎓 USE CASES
+
+EDUCATION:
+• Create study guides from lecture videos
+• Build course summaries from MOOCs
+• Extract key concepts for exam prep
+
+RESEARCH:
+• Analyze interview transcripts
+• Extract themes from documentary content
+• Build literature reviews from video sources
+
+CONTENT CREATION:
+• Research trending topics
+• Analyze competitor content
+• Generate podcast scripts from video content
+
+PROFESSIONAL DEVELOPMENT:
+• Learn from conference presentations
+• Build technical knowledge bases
+• Stay current with industry trends
+
+💎 WHY CHOOSE US
+
+✓ Powered by Google's latest Gemini AI
+✓ Structured, actionable output (not just transcripts)
+✓ Batch processing for entire playlists
+✓ NotebookLM integration for podcasts
+✓ Personal knowledge base organization
+✓ Active development and feature updates
+✓ Responsive support team
+
+🎉 GET STARTED FREE
+
+No credit card required for free tier!
+• Process 20 videos per day
+• Full access to core features
+• Upgrade anytime for unlimited processing
+
+Perfect for trying before you buy. See the power of AI video intelligence for yourself.
+
+📈 GROWING COMMUNITY
+
+Join thousands of users building AI-powered knowledge bases from YouTube content.
+
+🔗 INTEGRATIONS
+
+• YouTube API (playlist management)
+• Google AI Studio (video analysis)
+• NotebookLM (podcast generation)
+• The New Fuse (agent federation)
+• Cloud storage (sync across devices)
+
+⚙️ TECHNICAL DETAILS
+
+• Chrome Extension Manifest V3
+• Secure OAuth2 authentication
+• Real-time processing status
+• Automatic retry logic for failed videos
+• Export to multiple formats (Markdown, JSON, HTML)
+• API access for power users (TNF tier)
+
+🆘 SUPPORT
+
+• Email: support@aivideointelligence.com
+• Documentation: https://aivideointelligence.com/docs
+• FAQ: https://aivideointelligence.com/faq
+
+📋 REQUIREMENTS
+
+• Chrome browser (v88+)
+• Google account
+• YouTube access
+• Internet connection
+
+🌟 RATINGS & REVIEWS
+
+Users love AI Video Intelligence Suite:
+• "Game changer for my research workflow!"
+• "Saves me hours every week"
+• "Best AI tool I've used this year"
+• "The NotebookLM integration is brilliant"
+
+---
+
+PRIVACY POLICY: https://aivideointelligence.com/privacy-policy.html
+TERMS OF SERVICE: https://aivideointelligence.com/terms-of-service.html
+
+© 2026 AI Video Intelligence Suite. All rights reserved.

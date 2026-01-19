@@ -93,7 +93,7 @@ These videos have NO transcripts available and need video/audio analysis:
 ## 📁 Output Summary
 
 ### Generated Reports
-**Location:** `/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports/`
+**Location:** `/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/video-reports/`
 
 **File counts:**
 - `api_*.md` - 627 new reports (Direct API)
@@ -267,7 +267,7 @@ du -h data/consolidated_knowledge_base.md
 
 **GitHub:** https://github.com/whodaniel/ai-studio-automator
 **Documentation:** [VIDEO-PROCESSING-STATUS.md](VIDEO-PROCESSING-STATUS.md)
-**Reports:** `/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/video-reports/`
+**Reports:** `/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/video-reports/`
 
 **Status:** ✅ COMPLETE (Transcript Analysis)
 **Next:** Consolidate → NotebookLM → Podcast

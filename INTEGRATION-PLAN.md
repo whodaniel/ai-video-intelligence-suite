@@ -32,7 +32,7 @@ This document outlines the strategy for:
 - API keys and credentials
 
 ### Personal Data Location
-**Store locally:** `/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/The-New-Fuse/data/`
+**Store locally:** `/Users/danielgoldberg/Desktop/A1-Inter-LLM-Com/my-ai-knowledge-base/`
 
 ```
 The-New-Fuse/
