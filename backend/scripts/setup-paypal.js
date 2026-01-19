@@ -1,6 +1,6 @@
-const paypal = require('../services/paypal.service');
-const fs = require('fs');
-const path = require('path');
+import paypal from '../services/paypal.service.js';
+import fs from 'fs';
+import path from 'path';
 
 async function setupPayPal() {
   console.log('Setting up PayPal Products and Plans...');

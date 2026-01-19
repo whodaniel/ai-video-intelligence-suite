@@ -3,7 +3,6 @@
   "name": "AI Video Intelligence Suite",
   "version": "1.0.0",
   "description": "Process YouTube videos through AI Studio and NotebookLM automatically. Build your AI-powered knowledge base 10x faster.",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq2T0dDTHo/ruZ1rUC1J4VZqOpASCu2v2h390GeL3VkLY/m/sC1dYTb69m5xAfeP2vZxEsbztxISkeBckP6uv4U8kQc98GsZfis3fZ7thzS3cRFomTX8/8Fe2ENQaaZnSq0vcPGeM1qz6/fyPeUHv0CoQOsW4eRGB57vwqybjZCoFYlHK4Gu7b90n2FVLXRrDjltEB9zGQxpHtFJoittWa5Ys304B+ZBDS0PyeMYkukHOhFnGgKmuylt30JL0oEHBTDEEN2+a6mzQ9Fbt1TWqaS4HJlbolBtndmDE0CBcE7RHQeBGi+As/3m3VV9G7Coni+hkfdsD2ka/bQLijWdLFwIDAQAB",
   "author": "Your Name",
   
   "permissions": [

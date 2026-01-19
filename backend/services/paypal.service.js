@@ -1,3 +1,5 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 const paypal = require('@paypal/checkout-server-sdk');
 
 class PayPalService {
@@ -115,4 +117,4 @@ class PayPalService {
   }
 }
 
-module.exports = new PayPalService();
+export default new PayPalService();
