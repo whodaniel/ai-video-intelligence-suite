@@ -48,3 +48,25 @@ build/
 
 # Claude project files (keep local only)
 .claude/
+
+# Personal video data - DO NOT COMMIT
+*-videos.json
+recent-videos.json
+credentials.json
+youtube-token.json
+
+# Personal processing status and video-specific docs
+PROCESSING-COMPLETE-SUMMARY.md
+FINAL-PROCESSING-STATUS.md
+MISSING-VIDEOS-FOR-GEMINI.md
+process-remaining-12.md
+convert-gemini-responses.js
+convert-remaining-10.js
+CURRENT-SESSION-SUMMARY.md
+FINAL-COMPLETION-REPORT.md
+
+# Video library and reports (personal data)
+ai_video_library.html
+data/
+video-reports/
+consolidated_ai_knowledge.md
