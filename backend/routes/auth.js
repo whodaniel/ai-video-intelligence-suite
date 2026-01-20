@@ -43,11 +43,13 @@ router.post('/google', async (req, res) => {
       );
       user = result.rows[0];
       console.log('✅ New user created:', user.email);
-    } else {
-      // Update existing user
+      // Update existing user - preserve token if not provided
       result = await query(
         `UPDATE users
-         SET display_name = $1, avatar_url = $2, youtube_refresh_token_encrypted = $3, updated_at = NOW()
+         SET display_name = $1, 
+             avatar_url = $2, 
+             youtube_refresh_token_encrypted = COALESCE($3, youtube_refresh_token_encrypted), 
+             updated_at = NOW()
          WHERE google_id = $4
          RETURNING id, email, google_id, display_name, avatar_url, tier, created_at`,
         [displayName, avatarUrl, youtubeRefreshToken, googleId]
