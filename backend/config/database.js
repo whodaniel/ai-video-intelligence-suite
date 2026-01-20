@@ -5,6 +5,21 @@ dotenv.config();
 
 const { Pool } = pg;
 
+// Helper to check if string is valid URL
+const isValidUrl = (string) => {
+  try {
+    new URL(string);
+    return true;
+  } catch (_) {
+    return false;  
+  }
+}
+
+if (!process.env.DATABASE_URL || !isValidUrl(process.env.DATABASE_URL)) {
+  console.error("❌ CRITICAL: Invalid or missing DATABASE_URL. Connection will likely fail.");
+  // Don't crash immediately, let pg try, but log heavily.
+}
+
 // Create PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
