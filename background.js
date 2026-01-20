@@ -717,11 +717,9 @@ async function authenticateYouTube() {
       // Remember to skip native next time
       await chrome.storage.local.set({ preferWebAuth: true });
       
-      // Attempt 2: Web Auth Flow (Fallback for when user isn't signed into Chrome)
-      if (nativeError.message.includes('not signed in') || nativeError.message.includes('OAuth2 not granted')) {
-        return await authenticateWithWebFlow();
-      }
-      throw nativeError;
+      // Always fallback to Web Flow if native fails. 
+      // This is safer for dev/unpacked extensions where native specific errors vary.
+      return await authenticateWithWebFlow();
     }
     
     throw new Error('Authentication failed');
