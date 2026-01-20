@@ -169,36 +169,23 @@ router.get('/pricing', (req, res) => {
           features: [
             'Unlimited videos',
             '3 concurrent processes',
-            'Custom prompts (50 templates)',
+            '50 Custom prompts',
             'NotebookLM integration',
-            'Podcast creation (5/month)',
-            'Personal knowledge base browser',
-            'Topic extraction & organization',
+            '5 AI Podcasts',
             'Cloud sync',
-            'Advanced retry logic',
-            'Auto-download reports',
-            'Analytics dashboard',
             'Priority support'
           ]
         },
         tnf: {
           name: 'The New Fuse',
-          monthly: 49,
-          yearly: 490,
+          monthly: 30,
+          yearly: 300,
           yearlyDiscount: '17%',
           features: [
-            'All Pro features',
-            'The New Fuse Chrome extension',
+            'Everything in Pro',
             '10 concurrent processes',
-            'Unlimited custom prompts',
+            'Unlimited prompts',
             'Unlimited podcasts',
-            'API access',
-            'RAG semantic search',
-            'Personal AI assistant',
-            'Agent integration',
-            'Knowledge base as agent memory',
-            'Team collaboration',
-            'White-label option',
             'Dedicated support'
           ]
         }

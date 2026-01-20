@@ -50,8 +50,8 @@ class SubscriptionService {
     switch (tier) {
       case 'pro':
         return this.getProFeatures();
-      case 'enterprise':
-        return this.getEnterpriseFeatures();
+      case 'tnf':
+        return this.getTnfFeatures();
       default:
         return this.getFreeFeatures();
     }
@@ -105,10 +105,10 @@ class SubscriptionService {
     };
   }
 
-  // Enterprise tier features
-  getEnterpriseFeatures() {
+  // TNF tier features
+  getTnfFeatures() {
     return {
-      tier: 'enterprise',
+      tier: 'tnf',
       dailyLimit: Infinity,
       concurrentProcesses: 10,
       customPrompts: true,
@@ -138,7 +138,7 @@ class SubscriptionService {
     ]);
     
     // Paid tiers have unlimited processing
-    if (tier === 'pro' || tier === 'enterprise') {
+    if (tier === 'pro' || tier === 'tnf') {
       return true;
     }
     
@@ -157,7 +157,7 @@ class SubscriptionService {
       'dailyLimit'
     ]);
     
-    if (tier === 'pro' || tier === 'enterprise') {
+    if (tier === 'pro' || tier === 'tnf') {
       return Infinity;
     }
     
@@ -295,20 +295,17 @@ class SubscriptionService {
           'Priority support'
         ]
       },
-      enterprise: {
-        name: 'Enterprise',
-        price: 29.99,
+      tnf: {
+        name: 'The New Fuse',
+        price: 30,
         period: 'month',
-        yearlyPrice: 299,
+        yearlyPrice: 300,
         yearlyDiscount: '17%',
         features: [
           'Everything in Pro',
           '10 concurrent processes',
-          'Unlimited custom prompts',
+          'Unlimited prompts',
           'Unlimited podcasts',
-          'API access',
-          'Team collaboration',
-          'White-label option',
           'Dedicated support'
         ]
       }
