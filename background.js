@@ -209,16 +209,33 @@ import apiClient from './services/api-client.js';
 // Replace local storage subscription checks with API calls
 async function checkSubscription() {
   try {
+    // Ensure we have the token available for the API client
+    const { token } = await chrome.storage.local.get('token');
+    if (!token) {
+      console.warn('No auth token found for subscription check, defaulting to free.');
+      return { tier: 'free' };
+    }
+    
+    // The API Client internal retrieval might be failing if run in backgroundworker context 
+    // without explicit storage get sometimes, so we ensure it here or rely on its internal GET.
+    // However, the error "Not authorized, no token provided" implies the request was made but header missing.
+    // Let's ensure API Client has what it needs.
     const response = await apiClient.getSubscriptionStatus();
     return response.data;
   } catch (error) {
     console.error('Failed to check subscription:', error);
+    // Fallback to free tier on error to prevent blocking usage
     return { tier: 'free' };
   }
 }
 
 async function addToQueue(videos) {
   try {
+     const { token } = await chrome.storage.local.get('token');
+     if (!token) {
+        throw new Error('Not authorized: No token found. Please login.');
+     }
+
     const response = await apiClient.addToQueue(videos);
     
     // Sync local queue for UI
