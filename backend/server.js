@@ -41,16 +41,32 @@ app.use('/api/', limiter);
 
 // CORS configuration
 const corsOptions = {
-  origin: [
-    process.env.FRONTEND_URL,
-    process.env.WEB_DASHBOARD_URL,
-    'chrome-extension://*', // Allow any Chrome extension for development
-    'http://localhost:3000',
-    'http://localhost:5173' // Vite dev server
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      process.env.WEB_DASHBOARD_URL,
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'https://aivideointel.thenewfuse.com' // Explicitly add production domain
+    ];
+
+    // Check if origin is in allowed list or is a chrome extension
+    if (
+      allowedOrigins.includes(origin) || 
+      origin.startsWith('chrome-extension://')
+    ) {
+      callback(null, true);
+    } else {
+      console.log('Blocked CORS origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 app.use(cors(corsOptions));
 
