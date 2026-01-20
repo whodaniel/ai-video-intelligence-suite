@@ -27,12 +27,11 @@
     "https://notebooklm.google.com/*",
     "https://www.googleapis.com/*",
     "https://*.usercontent.goog/*",
-    "https://backend-production-ee16.up.railway.app/*",
-    "https://aivideointel.thenewfuse.com/*"
+    "https://backend-production-ee16.up.railway.app/*"
   ],
   
   "oauth2": {
-    "client_id": "998509408180-k62olkpaolebn62dvm386nrq6gicuour.apps.googleusercontent.com",
+    "client_id": "998509408180-8ucfo5f3chd77p0qm7j5c2rqgpuqkpgo.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/youtube.readonly",
       "https://www.googleapis.com/auth/drive.appdata",

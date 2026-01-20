@@ -50,7 +50,7 @@ const corsOptions = {
       process.env.WEB_DASHBOARD_URL,
       'http://localhost:3000',
       'http://localhost:5173',
-      'https://aivideointel.thenewfuse.com' // Explicitly add production domain
+      'http://localhost:5173'
     ];
 
     // Check if origin is in allowed list or is a chrome extension

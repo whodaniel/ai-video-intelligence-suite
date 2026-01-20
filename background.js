@@ -700,60 +700,16 @@ let youtubeAccessToken = null;
 let youtubeTokenExpiry = null;
 
 async function authenticateYouTube() {
+  console.log('🔐 User initiated explicit authentication...');
   try {
-    console.log('🔐 Authenticating with YouTube...');
-
-    // Clear any existing cached token first to ensure fresh auth
-    // This is crucial for account switching
-    if (youtubeAccessToken) {
-      try {
-        const tokenToRemove = (typeof youtubeAccessToken === 'object' && youtubeAccessToken?.token) ? youtubeAccessToken.token : youtubeAccessToken;
-        if (typeof tokenToRemove === 'string') {
-           await chrome.identity.removeCachedAuthToken({ token: tokenToRemove });
-           console.log('🧹 Cleared previous cached token');
-        }
-      } catch (e) {
-        console.warn('⚠️ Could not clear cached token:', e);
-      }
-    }
-
-    // Check if we should skip native auth based on previous failures
-    const { preferWebAuth } = await chrome.storage.local.get('preferWebAuth');
-    
-    if (preferWebAuth) {
-      console.log('⚡️ Skipping native auth due to previous failure, using Web Flow directly');
-      return await authenticateWithWebFlow();
-    }
-    
-    // Attempt 1: Native Chrome Identity (Preferred)
-    try {
-      const token = await chrome.identity.getAuthToken({ interactive: true });
-      const tokenStr = (typeof token === 'object' && token?.token) ? token.token : token;
-      if (tokenStr && typeof tokenStr === 'string') {
-        return await handleAuthSuccess(tokenStr);
-      }
-    } catch (nativeError) {
-      console.warn('⚠️ Native auth failed, trying Web Flow:', nativeError);
-      
-      // Remember to skip native next time
-      await chrome.storage.local.set({ preferWebAuth: true });
-      
-      // Always fallback to Web Flow if native fails. 
-      // This is safer for dev/unpacked extensions where native specific errors vary.
-      return await authenticateWithWebFlow();
-    }
-    
-    throw new Error('Authentication failed');
+     // User CLICKED the button. We force interactive options.
+     // Since we fixed the manifest to use correct Client ID, we can try native first, OR use web flow if preferred.
+     
+     // Let's use launchWebAuthFlow as it is the most reliable "explicit" method that forces a prompt if needed
+     // and avoids the "Chrome thinks I'm already signed in" loop of native identity.
+     return await authenticateWithWebFlow();
   } catch (error) {
-    console.error('❌ YouTube authentication failed:', error);
-    console.error('ℹ️ Current Extension ID:', chrome.runtime.id);
-    console.error('ℹ️ Please ensure this ID is authorized in Google Cloud Console.');
-    
-    // Reset web auth preference to allow retrying native auth if it was a transient issue
-    if (error.message && (error.message.includes('User did not approve') || error.message.includes('Authorization page could not be loaded'))) {
-       await chrome.storage.local.remove('preferWebAuth');
-    }
-    
+    console.error('❌ Explicit authentication failed:', error);
     throw error;
   }
 }
@@ -761,25 +717,20 @@ async function authenticateYouTube() {
 async function authenticateWithWebFlow() {
   console.log('🌐 Starting Web Auth Flow...');
   const manifest = chrome.runtime.getManifest();
-  // Use the client ID from the manifest
   const clientId = manifest.oauth2.client_id;
-  const redirectUri = chrome.identity.getRedirectURL();
+  const redirectUri = chrome.identity.getRedirectURL(); // Should be https://<ext-id>.chromiumapp.org/
   const scopes = encodeURIComponent(manifest.oauth2.scopes.join(' '));
   
-  console.log('ℹ️ OAUTH SETUP INFO:');
-  console.log('   Client ID:', clientId);
-  console.log('   Required Redirect URI:', redirectUri);
-  console.log('   Action: Add this Redirect URI to your Google Cloud Console for this Client ID.');
+  const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}&prompt=select_account`;
   
-  const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}`;
-  
+  // prompt=select_account forces the user to see the account picker, preventing auto-login loops.
+
   const redirectUrl = await chrome.identity.launchWebAuthFlow({
     url: authUrl,
     interactive: true
   });
   
   if (redirectUrl) {
-    // Extract token from URL
     const params = new URLSearchParams(new URL(redirectUrl).hash.substring(1));
     const token = params.get('access_token');
     
@@ -792,21 +743,14 @@ async function authenticateWithWebFlow() {
 }
 
 async function handleAuthSuccess(token) {
-  // Defensive: Ensure token is a string
-  if (typeof token === 'object' && token !== null) {
-      console.warn('⚠️ handleAuthSuccess received object token, extracting string...');
-      token = token.token || token.access_token || ''; 
-  }
-
   if (!token || typeof token !== 'string') {
-      console.error('❌ HandleAuthSuccess failed: Invalid token type', typeof token);
       throw new Error('Invalid token type');
   }
 
   youtubeAccessToken = token;
-  youtubeTokenExpiry = Date.now() + (3600 * 1000); // 1 hour
+  // Set expiry to 50 minutes to be safe (tokens usually last 60)
+  youtubeTokenExpiry = Date.now() + (50 * 60 * 1000); 
 
-  // Fetch user profile to detect account switches
   let userProfile = null;
   try {
     const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -820,101 +764,50 @@ async function handleAuthSuccess(token) {
     console.warn('⚠️ Could not fetch user profile:', e);
   }
 
-  // Check if this is a different account than before
-  const stored = await chrome.storage.local.get('lastAuthAccount');
-  if (stored.lastAuthAccount && userProfile && stored.lastAuthAccount !== userProfile.email) {
-    console.log(`🔄 Account switched from ${stored.lastAuthAccount} to ${userProfile.email}`);
-    // Clear any cached data from the previous account
-    await chrome.storage.local.remove(['cachedPlaylists', 'cachedVideos']);
-  }
-
+  // Save to storage
   await chrome.storage.local.set({
     youtubeToken: token,
     youtubeTokenExpiry: youtubeTokenExpiry,
     userProfile: userProfile,
-    lastAuthAccount: userProfile?.email
+    isAuthenticated: true // Explicit flag
   });
-  
-  // Clear the explicit sign-out flag since we just logged in successfully
-  await chrome.storage.local.remove('userExplicitlySignedOut');
 
-  console.log('✅ YouTube authentication successful');
+  console.log('✅ Auth successful and saved.');
   return { authenticated: true, token: token, userProfile };
 }
 
+// Check ONLY if we have a valid session in storage. Do NOT attempt to login.
 async function isYouTubeAuthenticated() {
   try {
     const now = Date.now();
     
-    // 1. Check Memory Cache
+    // 1. Check Memory (fastest)
     if (youtubeAccessToken && youtubeTokenExpiry && now < youtubeTokenExpiry) {
       return { authenticated: true };
     }
     
-    // 2. Check Local Storage
+    // 2. Check Storage
     const stored = await chrome.storage.local.get([
       'youtubeToken', 
       'youtubeTokenExpiry',
-      'preferWebAuth',
-      'userExplicitlySignedOut' // Check for explicit sign out
+      'isAuthenticated'
     ]);
-
-    // If user explicitly signed out, do NOT auto-login
-    if (stored.userExplicitlySignedOut) {
-       console.log('🛑 User explicitly signed out, skipping silent auth');
-       return { authenticated: false };
-    }
     
-    // If token exists and is valid
-    if (stored.youtubeToken && stored.youtubeTokenExpiry) {
+    if (stored.isAuthenticated && stored.youtubeToken && stored.youtubeTokenExpiry) {
       if (now < stored.youtubeTokenExpiry) {
-        // ... (rest of the valid token logic) ...
-        const storedToken = stored.youtubeToken;
-        youtubeAccessToken = (typeof storedToken === 'object' && storedToken?.token) ? storedToken.token : storedToken;
+        // Restore to memory
+        youtubeAccessToken = stored.youtubeToken;
         youtubeTokenExpiry = stored.youtubeTokenExpiry;
-
-        if (typeof youtubeAccessToken !== 'string') {
-            console.warn('⚠️ Stored token was not a string, treating as expired');
-        } else {
-             console.log('✅ Found valid stored token. Expires in:', Math.floor((stored.youtubeTokenExpiry - now) / 1000), 's');
-             return { authenticated: true };
-        }
+        return { authenticated: true };
       } else {
-         console.log('⚠️ Stored token expired. Now:', now, 'Expiry:', stored.youtubeTokenExpiry);
-      }
-    }
-    
-    // 3. If we have a token but it's expired, clear it and cached data
-    if (stored.youtubeToken) {
-      console.log('⚠️ Cached token expired, clearing auth data');
-      await chrome.storage.local.remove([
-        'youtubeToken',
-        'youtubeTokenExpiry',
-        'cachedPlaylists',
-        'cachedVideos'
-      ]);
-      youtubeAccessToken = null;
-      youtubeTokenExpiry = null;
-      return { authenticated: false, reason: 'expired' };
-    }
-
-    // 4. Fallback: Try Silent Native Auth (ONLY if not Web Preferring AND not explicitly signed out)
-    if (!stored.preferWebAuth && !stored.userExplicitlySignedOut) {
-    
-       try {
-        const token = await chrome.identity.getAuthToken({ interactive: false });
-        if (token) {
-          await handleAuthSuccess(token);
-          return { authenticated: true };
-        }
-      } catch (e) {
-        // Native silent failed - expected
+        console.log('⏰ Token expired in storage.');
+        return { authenticated: false };
       }
     }
     
     return { authenticated: false };
   } catch (error) {
-    console.error('Error checking YouTube auth:', error);
+    console.error('Error checking auth status:', error);
     return { authenticated: false };
   }
 }
@@ -1020,47 +913,38 @@ async function getPlaylistVideos(playlistId) {
 
 async function signOutYouTube() {
   try {
-    // Remove cached token from Chrome's identity API
+    console.log('🚪 Signing out...');
+    
+    // 1. Clear Chrome Identity Cache (Best effort)
     if (youtubeAccessToken) {
-      const tokenToRemove = (typeof youtubeAccessToken === 'object' && youtubeAccessToken?.token) ? youtubeAccessToken.token : youtubeAccessToken;
-      if (typeof tokenToRemove === 'string') {
-         await chrome.identity.removeCachedAuthToken({ token: tokenToRemove });
-      }
+       // Also try to revoke it for good measure?
+       try {
+         await fetch('https://oauth2.googleapis.com/revoke?token=' + youtubeAccessToken, {
+           method: 'POST',
+           headers: { 'Content-type': 'application/x-www-form-urlencoded' }
+         });
+       } catch(e) {}
+       
+       await chrome.identity.removeCachedAuthToken({ token: youtubeAccessToken });
     }
 
-    // Clear all cached tokens (important for account switching)
-    try {
-      const allTokens = await chrome.identity.getAllCachedAuthTokens();
-      for (const tokenInfo of allTokens) {
-        // Handle if tokenInfo is string or object
-        const t = (typeof tokenInfo === 'object' && tokenInfo?.token) ? tokenInfo.token : tokenInfo;
-        if (typeof t === 'string') {
-           await chrome.identity.removeCachedAuthToken({ token: t });
-        }
-      }
-    } catch (e) {
-      // getAllCachedAuthTokens might not be available in all Chrome versions
-      console.warn('⚠️ Could not clear all cached tokens:', e);
-    }
-
-    // Clear memory cache
+    // 2. Clear Memory
     youtubeAccessToken = null;
     youtubeTokenExpiry = null;
 
-    // Clear storage - remove ALL auth-related keys
+    // 3. Clear Storage - NUKE IT ALL related to auth
     await chrome.storage.local.remove([
       'youtubeToken',
       'youtubeTokenExpiry',
-      'preferWebAuth',
       'userProfile',
       'lastAuthAccount',
-      'token' // Clear the backend API token as well!
+      'isAuthenticated', // Clear the flag
+      'token', // Backend API token
+      'preferWebAuth',
+      'userExplicitlySignedOut' // No longer needed with this logic, but clear it anyway
     ]);
 
-    // Set a flag to prevent auto-login
-    await chrome.storage.local.set({ userExplicitlySignedOut: true });
-
-    console.log('✅ Signed out from YouTube - all auth data cleared');
+    console.log('✅ Signed out completely.');
     return { signedOut: true };
   } catch (error) {
     console.error('❌ Error signing out:', error);
