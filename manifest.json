@@ -27,7 +27,8 @@
     "https://notebooklm.google.com/*",
     "https://www.googleapis.com/*",
     "https://*.usercontent.goog/*",
-    "https://backend-production-ee16.up.railway.app/*"
+    "https://backend-production-ee16.up.railway.app/*",
+    "https://aivideointel.thenewfuse.com/*"
   ],
   
   "oauth2": {
