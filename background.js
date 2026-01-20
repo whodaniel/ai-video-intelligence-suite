@@ -834,6 +834,9 @@ async function handleAuthSuccess(token) {
     userProfile: userProfile,
     lastAuthAccount: userProfile?.email
   });
+  
+  // Clear the explicit sign-out flag since we just logged in successfully
+  await chrome.storage.local.remove('userExplicitlySignedOut');
 
   console.log('✅ YouTube authentication successful');
   return { authenticated: true, token: token, userProfile };
@@ -852,26 +855,30 @@ async function isYouTubeAuthenticated() {
     const stored = await chrome.storage.local.get([
       'youtubeToken', 
       'youtubeTokenExpiry',
-      'preferWebAuth'
+      'preferWebAuth',
+      'userExplicitlySignedOut' // Check for explicit sign out
     ]);
+
+    // If user explicitly signed out, do NOT auto-login
+    if (stored.userExplicitlySignedOut) {
+       console.log('🛑 User explicitly signed out, skipping silent auth');
+       return { authenticated: false };
+    }
     
     // If token exists and is valid
     if (stored.youtubeToken && stored.youtubeTokenExpiry) {
       if (now < stored.youtubeTokenExpiry) {
-        // Sync to memory cache (this was missing before!)
+        // ... (rest of the valid token logic) ...
         const storedToken = stored.youtubeToken;
         youtubeAccessToken = (typeof storedToken === 'object' && storedToken?.token) ? storedToken.token : storedToken;
         youtubeTokenExpiry = stored.youtubeTokenExpiry;
 
-        // Final sanity check
         if (typeof youtubeAccessToken !== 'string') {
             console.warn('⚠️ Stored token was not a string, treating as expired');
-            // Allow fall-through to expiration cleanup
         } else {
              console.log('✅ Found valid stored token. Expires in:', Math.floor((stored.youtubeTokenExpiry - now) / 1000), 's');
              return { authenticated: true };
         }
-        // Fall-through if invalid type
       } else {
          console.log('⚠️ Stored token expired. Now:', now, 'Expiry:', stored.youtubeTokenExpiry);
       }
@@ -891,8 +898,8 @@ async function isYouTubeAuthenticated() {
       return { authenticated: false, reason: 'expired' };
     }
 
-    // 4. Fallback: Try Silent Native Auth (ONLY if not Web Preferring)
-    if (!stored.preferWebAuth) {
+    // 4. Fallback: Try Silent Native Auth (ONLY if not Web Preferring AND not explicitly signed out)
+    if (!stored.preferWebAuth && !stored.userExplicitlySignedOut) {
     
        try {
         const token = await chrome.identity.getAuthToken({ interactive: false });
@@ -1014,7 +1021,6 @@ async function getPlaylistVideos(playlistId) {
 async function signOutYouTube() {
   try {
     // Remove cached token from Chrome's identity API
-    // Remove cached token from Chrome's identity API
     if (youtubeAccessToken) {
       const tokenToRemove = (typeof youtubeAccessToken === 'object' && youtubeAccessToken?.token) ? youtubeAccessToken.token : youtubeAccessToken;
       if (typeof tokenToRemove === 'string') {
@@ -1047,8 +1053,12 @@ async function signOutYouTube() {
       'youtubeTokenExpiry',
       'preferWebAuth',
       'userProfile',
-      'lastAuthAccount'
+      'lastAuthAccount',
+      'token' // Clear the backend API token as well!
     ]);
+
+    // Set a flag to prevent auto-login
+    await chrome.storage.local.set({ userExplicitlySignedOut: true });
 
     console.log('✅ Signed out from YouTube - all auth data cleared');
     return { signedOut: true };
