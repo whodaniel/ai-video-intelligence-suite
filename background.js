@@ -734,8 +734,8 @@ async function authenticateYouTube() {
 async function authenticateWithWebFlow() {
   console.log('🌐 Starting Web Auth Flow...');
   const manifest = chrome.runtime.getManifest();
-  // Use specific Web Application Client ID for fallback flow
-  const clientId = "998509408180-8ucfo5f3chd77p0qm7j5c2rqgpuqkpgo.apps.googleusercontent.com";
+  // Use the client ID from the manifest
+  const clientId = manifest.oauth2.client_id;
   const redirectUri = chrome.identity.getRedirectURL();
   const scopes = encodeURIComponent(manifest.oauth2.scopes.join(' '));
   
