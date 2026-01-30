@@ -499,65 +499,6 @@ function updateSelectionUI() {
   });
 }
 
-// Start processing
-async function startProcessing() {
-  try {
-    // Check subscription limits
-    const canProcess = await chrome.runtime.sendMessage({
-      type: 'SUBSCRIPTION_CAN_PROCESS'
-    });
-    
-    if (!canProcess.success || !canProcess.data) {
-      showUpgradeModal();
-      return;
-    }
-    
-    // Get selected videos
-    const selectedVideoData = state.filteredVideos.filter(v => 
-      state.selectedVideos.has(v.id)
-    );
-    
-    // Add to queue
-    await chrome.runtime.sendMessage({
-      type: 'QUEUE_ADD',
-      data: { videos: selectedVideoData }
-    });
-    
-    // Get processing level
-    const processingLevel = document.getElementById('processingLevel')?.value || 'ai_studio';
-
-    // Start automation
-    const response = await chrome.runtime.sendMessage({
-      type: 'AUTOMATION_START',
-      data: {
-        queue: selectedVideoData,
-        segmentDuration: 45,
-        destPlaylist: elements.destPlaylist.value,
-        processingLevel: processingLevel
-      }
-    });
-    
-    if (response.success) {
-      showProcessingView();
-      trackEvent('automation_started', { videoCount: selectedVideoData.length });
-    } else {
-      throw new Error(response.error || 'Failed to start automation');
-    }
-  } catch (error) {
-    console.error('Failed to start processing:', error);
-    showError('Failed to start processing. Please try again.');
-  }
-}
-
-// Check processing state
-async function checkProcessingState() {
-  const { processingState } = await chrome.storage.local.get('processingState');
-  
-  if (processingState && processingState.isProcessing) {
-    showProcessingView();
-  }
-}
-
 // Update subscription UI
 function updateSubscriptionUI() {
   if (!state.subscription) return;
@@ -638,9 +579,7 @@ function showSettingsModal() {
 async function loadSettings() {
   const settings = await chrome.storage.local.get([
     'preferences',
-    'userId',
-    'tier',
-    'installed'
+    'userProfile'
   ]);
   
   if (settings.preferences) {
@@ -650,103 +589,125 @@ async function loadSettings() {
     document.getElementById('autoAudioOverview').checked = settings.preferences.autoAudioOverview || false;
   }
   
-  document.getElementById('settingsEmail').textContent = state.userEmail || '-';
-  document.getElementById('settingsTier').textContent = settings.tier || 'free';
-  
-  if (settings.installed) {
-    const date = new Date(settings.installed);
-    document.getElementById('settingsMemberSince').textContent = date.toLocaleDateString();
+  if (settings.userProfile) {
+    document.getElementById('settingsEmail').textContent = settings.userProfile.email || '-';
+    document.getElementById('settingsTier').textContent = state.subscription?.tier?.toUpperCase() || 'FREE';
+    document.getElementById('settingsMemberSince').textContent = new Date(settings.userProfile.created_at).toLocaleDateString() || '-';
   }
 }
 
-// Save settings
-async function saveSettings() {
-  const preferences = {
-    segmentDuration: parseInt(document.getElementById('segmentDuration').value),
-    concurrentProcesses: parseInt(document.getElementById('concurrentProcesses').value),
-    autoOpenNotebook: document.getElementById('autoOpenNotebook').checked,
-    autoAudioOverview: document.getElementById('autoAudioOverview').checked
-  };
-  
-  await chrome.storage.local.set({ preferences });
-  showSuccess('Settings saved!');
+// Check processing state for updates
+async function checkProcessingState() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'STORAGE_GET',
+      data: { keys: ['processingState'] }
+    });
+    
+    if (response.success && response.data.processingState) {
+      const processingState = response.data.processingState;
+      
+      if (processingState.isProcessing) {
+        updateProcessingUI(processingState);
+        
+        // If we're showing main interface but processing is active, switch to processing view
+        if (!elements.processingView.classList.contains('hidden') === false) {
+          showProcessingView();
+        }
+      }
+    }
+  } catch (error) {
+    console.log('No active processing');
+  }
 }
 
-// Event listeners setup
+// Update processing UI
+function updateProcessingUI(processingState) {
+  const { currentIndex, totalCount, currentVideo } = processingState;
+  
+  elements.processedCount.textContent = currentIndex || 0;
+  elements.totalCount.textContent = totalCount || 0;
+  
+  const percentage = totalCount > 0 ? (currentIndex / totalCount) * 100 : 0;
+  elements.processProgress.style.width = `${percentage}%`;
+  elements.progressPercent.textContent = `${Math.round(percentage)}%`;
+  
+  if (currentVideo) {
+    elements.currentVideoThumb.src = currentVideo.thumbnail || '';
+    elements.currentVideoTitle.textContent = currentVideo.title || 'Unknown';
+    elements.currentVideoStatus.textContent = `Processing... (${currentIndex + 1}/${totalCount})`;
+  }
+}
+
+// Set up event listeners
 function setupEventListeners() {
-  // Authentication
-  elements.authBtn.addEventListener('click', async () => {
+  // Auth
+  elements.authBtn?.addEventListener('click', async () => {
     try {
-      // Disable button to prevent double clicks
       elements.authBtn.disabled = true;
-      elements.authBtn.style.opacity = '0.7';
-      const originalText = elements.authBtn.innerHTML;
-      elements.authBtn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0"></div>';
+      elements.authBtn.innerHTML = '<span class="spinner"></span> Signing in...';
       
       const response = await chrome.runtime.sendMessage({
         type: 'YOUTUBE_AUTHENTICATE'
       });
       
       if (response.success) {
+        state.authenticated = true;
         await loadUserData();
         await loadPlaylists();
         showMainInterface();
+        updateSignOutButtonVisibility(true);
       } else {
         throw new Error(response.error || 'Authentication failed');
       }
     } catch (error) {
       console.error('Auth failed:', error);
-      
-      if (error.message.includes('User did not approve') || error.message.includes('closed')) {
-        // User cancelled, just reset button
-      } else {
-        showError('Authentication failed. Please try again.');
-      }
+      showError('Authentication failed. Please try again.');
     } finally {
-      // Reset button
       elements.authBtn.disabled = false;
-      elements.authBtn.style.opacity = '1';
       elements.authBtn.innerHTML = `
-          <svg class="google-logo" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-          </svg>
-          <span>Sign in with Google</span>
+        <svg class="google-logo" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        Sign in with Google
       `;
     }
   });
   
-  // ... other Listeners ...
-
   // Playlist selection
-  elements.sourcePlaylist.addEventListener('change', (e) => {
+  elements.sourcePlaylist?.addEventListener('change', async (e) => {
     const playlistId = e.target.value;
     if (playlistId) {
       state.selectedPlaylist = playlistId;
-      loadPlaylistVideos(playlistId);
+      state.selectedVideos.clear();
+      updateSelectionUI();
+      await loadPlaylistVideos(playlistId);
     }
   });
-
-  // ... (keeping other listeners essentially the same if they are correct) ...
   
-  // Refresh playlists
-  elements.refreshPlaylists.addEventListener('click', loadPlaylists);
+  elements.refreshPlaylists?.addEventListener('click', async () => {
+    elements.refreshPlaylists.classList.add('spinning');
+    await loadPlaylists();
+    setTimeout(() => {
+      elements.refreshPlaylists.classList.remove('spinning');
+    }, 1000);
+  });
   
-  // Create playlist
-  elements.createPlaylist.addEventListener('click', async () => {
+  elements.createPlaylist?.addEventListener('click', async () => {
     const title = prompt('Enter playlist name:');
     if (title) {
       try {
         const response = await chrome.runtime.sendMessage({
           type: 'YOUTUBE_CREATE_PLAYLIST',
-          data: { title, description: 'Created by AI Video Intelligence Suite' }
+          data: { title, description: 'Created by AI Video Intelligence' }
         });
         
         if (response.success) {
-          showSuccess('Playlist created!');
           await loadPlaylists();
+          elements.destPlaylist.value = response.data.id;
         }
       } catch (error) {
         showError('Failed to create playlist');
@@ -755,12 +716,12 @@ function setupEventListeners() {
   });
   
   // Filters
-  elements.searchFilter.addEventListener('input', debounce(() => {
+  elements.searchFilter?.addEventListener('input', () => {
     applyFilters();
     renderVideoList();
-  }, 300));
+  });
   
-  elements.clearFilter.addEventListener('click', () => {
+  elements.clearFilter?.addEventListener('click', () => {
     elements.searchFilter.value = '';
     elements.filterWatched.checked = false;
     elements.filterDuplicates.checked = false;
@@ -769,62 +730,71 @@ function setupEventListeners() {
     renderVideoList();
   });
   
-  [elements.filterWatched, elements.filterDuplicates, elements.filterShort].forEach(filter => {
-    filter.addEventListener('change', () => {
-      applyFilters();
-      renderVideoList();
-    });
-  });
-  
-  // Selection
-  elements.selectAll.addEventListener('click', () => {
-    state.filteredVideos.forEach(video => state.selectedVideos.add(video.id));
+  elements.filterWatched?.addEventListener('change', () => {
+    applyFilters();
     renderVideoList();
   });
   
-  elements.deselectAll.addEventListener('click', () => {
+  elements.filterDuplicates?.addEventListener('change', () => {
+    applyFilters();
+    renderVideoList();
+  });
+  
+  elements.filterShort?.addEventListener('change', () => {
+    applyFilters();
+    renderVideoList();
+  });
+  
+  // Selection buttons
+  elements.selectAll?.addEventListener('click', () => {
+    state.filteredVideos.forEach(video => {
+      state.selectedVideos.add(video.id);
+    });
+    renderVideoList();
+    updateSelectionUI();
+  });
+  
+  elements.deselectAll?.addEventListener('click', () => {
     state.selectedVideos.clear();
     renderVideoList();
+    updateSelectionUI();
   });
   
   // Actions
-  elements.processBtn.addEventListener('click', startProcessing);
+  elements.processBtn?.addEventListener('click', startProcessing);
+  elements.bulkImportBtn?.addEventListener('click', bulkImportToNotebookLM);
+  elements.exportQueueBtn?.addEventListener('click', exportQueue);
   
-  elements.bulkImportBtn.addEventListener('click', () => {
-    // TODO: Implement NotebookLM bulk import
-    showInfo('NotebookLM integration coming soon!');
+  // Processing view
+  elements.backToQueue?.addEventListener('click', () => {
+    showMainInterface();
   });
   
-  elements.exportQueueBtn.addEventListener('click', exportQueue);
-  
-  // Processing controls
-  elements.backToQueue.addEventListener('click', showMainInterface);
-  
-  elements.pauseBtn.addEventListener('click', async () => {
+  elements.pauseBtn?.addEventListener('click', async () => {
     await chrome.runtime.sendMessage({ type: 'AUTOMATION_PAUSE' });
     elements.pauseBtn.classList.add('hidden');
     elements.resumeBtn.classList.remove('hidden');
   });
   
-  elements.resumeBtn.addEventListener('click', async () => {
+  elements.resumeBtn?.addEventListener('click', async () => {
     await chrome.runtime.sendMessage({ type: 'AUTOMATION_RESUME' });
     elements.resumeBtn.classList.add('hidden');
     elements.pauseBtn.classList.remove('hidden');
   });
   
-  elements.stopBtn.addEventListener('click', async () => {
+  elements.stopBtn?.addEventListener('click', async () => {
     if (confirm('Are you sure you want to stop processing?')) {
       await chrome.runtime.sendMessage({ type: 'AUTOMATION_STOP' });
       showMainInterface();
     }
   });
   
-  elements.clearLogs.addEventListener('click', () => {
+  elements.clearLogs?.addEventListener('click', () => {
     elements.processLogs.innerHTML = '';
   });
   
   // Settings
-  elements.settingsBtn.addEventListener('click', showSettingsModal);
+  elements.settingsBtn?.addEventListener('click', showSettingsModal);
   
   document.getElementById('signOutBtn')?.addEventListener('click', async () => {
     if (confirm('Are you sure you want to sign out?')) {
@@ -872,133 +842,225 @@ function setupEventListeners() {
     });
   });
   
-  elements.upgradePrompt?.addEventListener('click', showUpgradeModal);
+  // Settings save
+  document.getElementById('clearCacheBtn')?.addEventListener('click', async () => {
+    await chrome.storage.local.remove(['queue', 'processingState']);
+    showError('Cache cleared successfully');
+  });
+  
+  document.getElementById('exportDataBtn')?.addEventListener('click', exportAllData);
 }
 
-// Listen for messages from background
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'PROGRESS_UPDATE') {
-    updateProcessingProgress(message.data);
-  }
-  sendResponse({ received: true });
-});
-
-// Update processing progress
-function updateProcessingProgress(data) {
-  if (!data) return;
-  
-  elements.processedCount.textContent = data.processedCount || 0;
-  elements.totalCount.textContent = data.totalCount || 0;
-  
-  const percentage = ((data.processedCount || 0) / (data.totalCount || 1)) * 100;
-  elements.processProgress.style.width = `${percentage}%`;
-  elements.progressPercent.textContent = `${Math.round(percentage)}%`;
-  
-  if (data.currentVideo) {
-    elements.currentVideoTitle.textContent = data.currentVideo.title;
-    elements.currentVideoStatus.textContent = data.status || 'Processing...';
-    if (data.currentVideo.thumbnail) {
-      elements.currentVideoThumb.src = data.currentVideo.thumbnail;
+// Start processing
+async function startProcessing() {
+  try {
+    // Check subscription limits
+    const canProcess = await chrome.runtime.sendMessage({
+      type: 'SUBSCRIPTION_CAN_PROCESS'
+    });
+    
+    if (!canProcess.success || !canProcess.data) {
+      showUpgradeModal();
+      return;
     }
-  }
-  
-  if (data.log) {
-    addLog(data.log);
+    
+    // Get selected videos
+    const selectedVideoData = state.filteredVideos.filter(v => 
+      state.selectedVideos.has(v.id)
+    );
+    
+    // Add to queue
+    await chrome.runtime.sendMessage({
+      type: 'QUEUE_ADD',
+      data: { videos: selectedVideoData }
+    });
+    
+    // Get processing level
+    const processingLevel = document.getElementById('processingLevel')?.value || 'ai_studio';
+    
+    // Get preferences
+    const { preferences } = await chrome.storage.local.get('preferences');
+    
+    // Start automation
+    showProcessingView();
+    
+    const response = await chrome.runtime.sendMessage({
+      type: 'AUTOMATION_START',
+      data: {
+        queue: selectedVideoData,
+        processingLevel: processingLevel,
+        segmentDuration: preferences?.segmentDuration || 45,
+        concurrentProcesses: preferences?.concurrentProcesses || 1
+      }
+    });
+    
+    if (response.success) {
+      console.log('Automation started');
+    } else {
+      throw new Error(response.error || 'Failed to start automation');
+    }
+  } catch (error) {
+    console.error('Failed to start processing:', error);
+    showError('Failed to start processing. Please try again.');
+    showMainInterface();
   }
 }
 
-// Add log entry
-function addLog(message, type = 'info') {
-  const timestamp = new Date().toLocaleTimeString();
-  const logEntry = document.createElement('div');
-  logEntry.className = `log-entry log-${type}`;
-  logEntry.textContent = `[${timestamp}] ${message}`;
-  elements.processLogs.appendChild(logEntry);
-  elements.processLogs.scrollTop = elements.processLogs.scrollHeight;
+// Bulk import to NotebookLM
+async function bulkImportToNotebookLM() {
+  try {
+    const selectedVideoData = state.filteredVideos.filter(v => 
+      state.selectedVideos.has(v.id)
+    );
+    
+    if (selectedVideoData.length === 0) {
+      showError('Please select videos to import');
+      return;
+    }
+    
+    // Open NotebookLM with selected videos
+    const videoUrls = selectedVideoData.map(v => v.url).join('\n');
+    
+    // Copy to clipboard
+    await navigator.clipboard.writeText(videoUrls);
+    
+    // Open NotebookLM
+    chrome.tabs.create({
+      url: 'https://notebooklm.google.com',
+      active: true
+    });
+    
+    showError(`${selectedVideoData.length} video URLs copied to clipboard. Paste them into NotebookLM.`);
+  } catch (error) {
+    console.error('Failed to import to NotebookLM:', error);
+    showError('Failed to import. Please try again.');
+  }
 }
 
 // Export queue
 async function exportQueue() {
-  const selectedVideos = state.filteredVideos.filter(v => state.selectedVideos.has(v.id));
-  const data = JSON.stringify(selectedVideos, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `queue_${Date.now()}.json`;
-  a.click();
-  
-  URL.revokeObjectURL(url);
+  try {
+    const { queue } = await chrome.storage.local.get('queue');
+    
+    if (!queue || queue.length === 0) {
+      showError('Queue is empty');
+      return;
+    }
+    
+    const dataStr = JSON.stringify(queue, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    
+    const url = URL.createObjectURL(dataBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `video-queue-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Failed to export queue:', error);
+    showError('Failed to export queue');
+  }
+}
+
+// Export all data
+async function exportAllData() {
+  try {
+    const allData = await chrome.storage.local.get(null);
+    const dataStr = JSON.stringify(allData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    
+    const url = URL.createObjectURL(dataBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aivi-data-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Failed to export data:', error);
+    showError('Failed to export data');
+  }
 }
 
 // Utility functions
-function showLoading(element, message = 'Loading...') {
-  element.innerHTML = `<div class="loading-state"><div class="spinner"></div><p>${message}</p></div>`;
-}
-
-function showError(message) {
-  // TODO: Implement toast notifications
-  alert(message);
-}
-
-function showSuccess(message) {
-  // TODO: Implement toast notifications
-  console.log('✅', message);
-}
-
-function showInfo(message) {
-  // TODO: Implement toast notifications
-  alert(message);
-}
-
 function formatDuration(seconds) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
+  if (!seconds) return '--:--';
+  const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(secs).padStart(2, '0')}`;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 function formatNumber(num) {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M';
-  }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K';
-  }
-  return num;
+  if (!num) return '0';
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return num.toString();
 }
 
 function escapeHtml(text) {
+  if (!text) return '';
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
 }
 
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
+function showLoading(element, message = 'Loading...') {
+  element.innerHTML = `
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>${message}</p>
+    </div>
+  `;
 }
 
-async function trackEvent(event, properties) {
-  await chrome.runtime.sendMessage({
-    type: 'ANALYTICS_TRACK',
-    data: { event, properties }
-  });
+function showError(message) {
+  // Simple error toast
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-error';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
 }
 
-// Initialize on load
+// Listen for messages from background
+chrome.runtime.onMessage.addListener((message) => {
+  switch (message.type) {
+    case 'PROGRESS_UPDATE':
+      updateProcessingUI({
+        currentIndex: message.current - 1,
+        totalCount: message.total,
+        currentVideo: message.data?.currentVideo
+      });
+      break;
+      
+    case 'LOG':
+      if (elements.processLogs) {
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message.message}`;
+        elements.processLogs.appendChild(logEntry);
+        elements.processLogs.scrollTop = elements.processLogs.scrollHeight;
+      }
+      break;
+      
+    case 'AUTOMATION_COMPLETE':
+      showMainInterface();
+      showError('Processing complete!');
+      break;
+      
+    case 'AUTOMATION_ERROR':
+      showError(message.error || 'Automation error occurred');
+      break;
+  }
+});
+
+// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', init);
 
 console.log('✅ Popup script loaded');
