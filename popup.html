@@ -136,6 +136,27 @@
             </select>
           </section>
 
+          <!-- Processing Level Selection -->
+          <section class="section">
+            <div class="section-header">
+              <h3>⚙️ Processing Level</h3>
+              <span class="info-text" style="font-size: 0.85rem; color: var(--text-muted); font-weight: normal;">
+                Choose processing depth & cost
+              </span>
+            </div>
+            <select id="processingLevel" class="select-large">
+              <option value="transcript">📝 Transcript Only (FREE - Fastest)</option>
+              <option value="flash">⚡ Flash Analysis (Cheap - Recommended)</option>
+              <option value="pro">🧠 Pro Analysis (Moderate - Deep Insights)</option>
+              <option value="ai_studio" selected>🎬 AI Studio (Uses Your Gemini Account)</option>
+            </select>
+            <div class="processing-info" style="margin-top: 8px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; font-size: 0.85rem; color: var(--text-muted);">
+              <span id="processingDescription">
+                Full video analysis using your Google AI Studio account. Best quality, uses segments for long videos.
+              </span>
+            </div>
+          </section>
+
           <!-- Filter & Search -->
           <section class="section">
             <div class="section-header">

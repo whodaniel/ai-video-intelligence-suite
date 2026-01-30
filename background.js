@@ -213,6 +213,39 @@ async function handleMessage(message, sender) {
 // Queue management functions
 import apiClient from './services/api-client.js';
 
+// Save report data to backend
+async function saveReportToBackend(taskResult) {
+  try {
+    const { token } = await chrome.storage.local.get('token');
+    if (!token) {
+      console.warn('No auth token, skipping backend save');
+      return;
+    }
+
+    // First, we need to find the video_queue_id from our queue
+    const { queue = [] } = await chrome.storage.local.get('queue');
+    const video = queue.find(v => v.id === taskResult.videoId);
+
+    if (!video || !video.queueId) {
+      console.warn('Video not found in queue or missing queueId');
+      return;
+    }
+
+    const reportData = {
+      videoQueueId: video.queueId,
+      segmentIndex: taskResult.segmentIndex || 0,
+      contentMarkdown: taskResult.reportContent,
+      contentJson: {} // Parse content if needed
+    };
+
+    const response = await apiClient.createReport(reportData);
+    console.log('✅ Report saved to backend:', response.data);
+  } catch (error) {
+    console.error('Failed to save report:', error);
+    // Don't throw - we don't want to fail the automation if backend save fails
+  }
+}
+
 // Replace local storage subscription checks with API calls
 async function checkSubscription() {
   try {
@@ -297,12 +330,20 @@ let pendingTaskResolve = null;
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'TASK_COMPLETE' || message.type === 'TASK_ERROR') {
     console.log('📩 Task result:', message);
+
+    // If we have report content, save it to backend
+    if (message.type === 'TASK_COMPLETE' && message.reportContent) {
+      saveReportToBackend(message).catch(err => {
+        console.error('Failed to save report to backend:', err);
+      });
+    }
+
     if (pendingTaskResolve) {
       pendingTaskResolve(message);
       pendingTaskResolve = null;
     }
   }
-  
+
   if (message.type === 'CONTENT_SCRIPT_READY') {
     console.log('📢 Content script ready on:', message.url);
   }
@@ -438,8 +479,14 @@ async function startAutomation(config) {
       type: 'PROGRESS_UPDATE',
       current: videoIndex + 1,
       total: queue.length,
-      videoTitle: video.title,
-      videoUrl: video.url
+      data: {
+        processedCount: videoIndex + 1,
+        totalCount: queue.length,
+        currentVideo: {
+          title: video.title,
+          url: video.url
+        }
+      }
     }).catch(() => {});
     
     try {

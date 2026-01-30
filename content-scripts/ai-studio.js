@@ -550,7 +550,7 @@ async function downloadReport(videoId, segmentIndex = 0) {
   if (downloadBtn) {
     await clickElement(downloadBtn, 'Download button');
     sendLog('Report downloaded', 'success');
-    return true;
+    return { success: true, content: null };
   }
 
   const copyBtn = buttons.find(b => {
@@ -575,14 +575,16 @@ async function downloadReport(videoId, segmentIndex = 0) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         sendLog('Report saved as markdown file', 'success');
-        return true;
+
+        // Return the content so it can be sent to backend
+        return { success: true, content: text };
       }
     } catch (e) {
       sendLog('Could not auto-save report from clipboard', 'warning');
     }
   }
 
-  return false;
+  return { success: false, content: null };
 }
 
 // ============================================
@@ -659,16 +661,20 @@ async function processTask(task) {
           throw new Error(result.error);
         }
 
+        let reportData = null;
         if (result.complete) {
-          await downloadReport(videoId, segmentIndex);
+          reportData = await downloadReport(videoId, segmentIndex);
         }
 
         safeSendMessage({
           type: 'TASK_COMPLETE',
           taskType: 'PROCESS_SEGMENT',
           url: url,
+          title: title,
+          videoId: videoId,
           segmentIndex: segmentIndex,
-          success: result.complete
+          success: result.complete,
+          reportContent: reportData?.content || null
         });
         break;
 

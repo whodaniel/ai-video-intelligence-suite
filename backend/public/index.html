@@ -587,7 +587,7 @@
 
     function updateUIForLogin() {
       const header = document.querySelector('header .container');
-      
+
       // Remove old login button if it exists
       const oldBtn = header.querySelector('.login-btn');
       if (oldBtn) oldBtn.remove();
@@ -596,16 +596,54 @@
       const oldUserNav = header.querySelector('.user-nav');
       if (oldUserNav) oldUserNav.remove();
 
-      // Show User Profile or Logout
+      // Show User Profile and Navigation
       const userDiv = document.createElement('div');
       userDiv.className = 'user-nav';
       userDiv.style.display = 'flex';
       userDiv.style.alignItems = 'center';
+      userDiv.style.gap = '20px';
       userDiv.innerHTML = `
-        <span style="color:white; margin-right:15px; font-weight:500;">${currentUser.displayName}</span>
-        <button onclick="logout()" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.9rem;">Sign Out</button>
+        <nav style="display: flex; gap: 20px; align-items: center;">
+          <a href="/dashboard.html" style="color: var(--text-color); text-decoration: none; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='var(--text-color)'">Dashboard</a>
+          <a href="/reports.html" style="color: var(--text-color); text-decoration: none; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='var(--text-color)'">Reports</a>
+          <a href="/account.html" style="color: var(--text-color); text-decoration: none; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='var(--text-color)'">Account</a>
+          <a href="https://chrome.google.com/webstore/detail/ai-video-intelligence-suite/YOUR_EXTENSION_ID" target="_blank" style="color: var(--text-color); text-decoration: none; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='var(--text-color)'">Get Extension</a>
+          <a href="support.html" style="color: var(--text-color); text-decoration: none; font-weight: 500; transition: color 0.2s;" onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='var(--text-color)'">Support</a>
+        </nav>
+        <div style="display: flex; align-items: center; gap: 12px; padding-left: 20px; border-left: 1px solid rgba(255,255,255,0.1);">
+          <span style="color:white; font-weight:500;">${currentUser.displayName}</span>
+          <button onclick="logout()" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.9rem;">Sign Out</button>
+        </div>
       `;
       header.appendChild(userDiv);
+
+      // Also update hero section to show quick start for logged-in users
+      const hero = document.querySelector('.hero');
+      if (hero && !document.querySelector('.logged-in-hero')) {
+        const quickStart = document.createElement('div');
+        quickStart.className = 'logged-in-hero';
+        quickStart.style.marginTop = '40px';
+        quickStart.style.padding = '32px';
+        quickStart.style.background = 'rgba(255, 255, 255, 0.03)';
+        quickStart.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+        quickStart.style.borderRadius = '24px';
+        quickStart.innerHTML = `
+          <h3 style="font-size: 1.5rem; margin-bottom: 20px; color: white;">🎉 Welcome back, ${currentUser.displayName.split(' ')[0]}!</h3>
+          <p style="color: var(--text-muted); margin-bottom: 24px;">Ready to process more videos? Choose your next step:</p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <a href="/dashboard.html" class="btn btn-outline" style="text-decoration: none; text-align: center;">
+              📊 View Dashboard
+            </a>
+            <a href="/reports.html" class="btn btn-outline" style="text-decoration: none; text-align: center;">
+              📝 Your Reports
+            </a>
+            <a href="https://chrome.google.com/webstore/detail/ai-video-intelligence-suite/YOUR_EXTENSION_ID" target="_blank" class="btn btn-primary" style="text-decoration: none; text-align: center;">
+              🚀 Launch Extension
+            </a>
+          </div>
+        `;
+        hero.querySelector('.container').appendChild(quickStart);
+      }
     }
 
     async function logout() {

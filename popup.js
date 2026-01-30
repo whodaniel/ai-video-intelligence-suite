@@ -44,6 +44,10 @@ const elements = {
   refreshPlaylists: document.getElementById('refreshPlaylists'),
   createPlaylist: document.getElementById('createPlaylist'),
   playlistVideoCount: document.getElementById('playlistVideoCount'),
+
+  // Processing level
+  processingLevel: document.getElementById('processingLevel'),
+  processingDescription: document.getElementById('processingDescription'),
   
   // Filters
   searchFilter: document.getElementById('searchFilter'),
@@ -214,13 +218,32 @@ function populatePlaylistDropdowns() {
   
   // Destination playlist
   elements.destPlaylist.innerHTML = '<option value="">Select destination...</option>';
-  
+
   state.playlists.forEach(playlist => {
     const option = document.createElement('option');
     option.value = playlist.id;
     option.textContent = playlist.title;
     elements.destPlaylist.appendChild(option);
   });
+
+  // Set up processing level descriptions
+  const processingDescriptions = {
+    transcript: 'Extract YouTube captions only. FREE, instant results. Best for quick text search and basic summaries.',
+    flash: 'Analyze transcript with Gemini Flash. ~$0.0008/video. Good balance of speed, cost, and quality.',
+    pro: 'Deep analysis with Gemini Pro. ~$0.01/video. Detailed insights, technical breakdowns, and research connections.',
+    ai_studio: 'Full video analysis using your Google AI Studio account. Best quality, uses segments for long videos.'
+  };
+
+  // Update description when processing level changes
+  const processingLevelSelect = document.getElementById('processingLevel');
+  const processingDescription = document.getElementById('processingDescription');
+
+  if (processingLevelSelect && processingDescription) {
+    processingLevelSelect.addEventListener('change', (e) => {
+      const level = e.target.value;
+      processingDescription.textContent = processingDescriptions[level];
+    });
+  }
 }
 
 // Load videos from selected playlist
@@ -393,13 +416,17 @@ async function startProcessing() {
       data: { videos: selectedVideoData }
     });
     
+    // Get processing level
+    const processingLevel = document.getElementById('processingLevel')?.value || 'ai_studio';
+
     // Start automation
     const response = await chrome.runtime.sendMessage({
       type: 'AUTOMATION_START',
       data: {
         queue: selectedVideoData,
         segmentDuration: 45,
-        destPlaylist: elements.destPlaylist.value
+        destPlaylist: elements.destPlaylist.value,
+        processingLevel: processingLevel
       }
     });
     
