@@ -487,7 +487,8 @@ async function startAutomation(config) {
       currentIndex: 0,
       totalCount: queue.length,
       currentVideo: null,
-      config: config
+      config: config,
+      lastUpdated: Date.now()
     }
   });
   
@@ -517,7 +518,8 @@ async function startAutomation(config) {
         isPaused: false,
         currentIndex: videoIndex,
         totalCount: queue.length,
-        currentVideo: video
+        currentVideo: video,
+        lastUpdated: Date.now()
       }
     });
     
@@ -661,7 +663,8 @@ async function startAutomation(config) {
       isProcessing: false,
       isPaused: false,
       currentIndex: queue.length,
-      totalCount: queue.length
+      totalCount: queue.length,
+      lastUpdated: Date.now()
     }
   });
   
@@ -725,7 +728,8 @@ async function stopAutomation() {
       isProcessing: false,
       isPaused: false,
       currentIndex: 0,
-      currentVideo: null
+      currentVideo: null,
+      lastUpdated: Date.now()
     }
   });
   
@@ -753,7 +757,8 @@ async function handleComplete(data) {
       isProcessing: false,
       isPaused: false,
       currentIndex: 0,
-      currentVideo: null
+      currentVideo: null,
+      lastUpdated: Date.now()
     }
   });
   

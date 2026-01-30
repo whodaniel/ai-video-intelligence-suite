@@ -110,15 +110,34 @@ async function init() {
       const { processingState } = await chrome.storage.local.get('processingState');
 
       // Only show processing view if actively processing AND not completed
+      // Also check if processing state is recent (within last hour) to avoid stale states
+      const oneHourAgo = Date.now() - (60 * 60 * 1000);
+      const isRecentProcessing = processingState && processingState.lastUpdated &&
+                                 processingState.lastUpdated > oneHourAgo;
       const isActivelyProcessing = processingState &&
                                    processingState.isProcessing &&
-                                   processingState.currentIndex < processingState.totalCount;
+                                   processingState.currentIndex < processingState.totalCount &&
+                                   isRecentProcessing;
 
       if (isActivelyProcessing) {
         // Show processing view by default when actively processing
+        console.log('Showing processing view - active processing detected');
         showProcessingView();
       } else {
         // Show main interface for queue selection (default)
+        console.log('Showing main interface - default view');
+        // Clear stale processing state
+        if (processingState && processingState.isProcessing) {
+          await chrome.storage.local.set({
+            processingState: {
+              isProcessing: false,
+              isPaused: false,
+              currentIndex: 0,
+              totalCount: 0,
+              currentVideo: null
+            }
+          });
+        }
         await loadPlaylists();
         showMainInterface();
       }
@@ -183,9 +202,21 @@ async function checkAuthentication() {
   }
 }
 
+// Known Pro accounts (fallback when backend unavailable)
+const PRO_ACCOUNTS = [
+  'bizsynth@gmail.com',
+  'startreetv-1705@pages.plusgoogle.com'
+];
+
 // Load user data
 async function loadUserData() {
   try {
+    // Get user profile to check email
+    const { userProfile } = await chrome.storage.local.get('userProfile');
+    if (userProfile && userProfile.email) {
+      state.userEmail = userProfile.email;
+    }
+
     // Get subscription status
     const subResponse = await chrome.runtime.sendMessage({
       type: 'SUBSCRIPTION_CHECK'
@@ -193,6 +224,19 @@ async function loadUserData() {
     
     if (subResponse.success) {
       state.subscription = subResponse.data;
+      
+      // Fallback: Check if user is in Pro accounts list (when backend unavailable)
+      if (state.subscription.tier === 'free' && state.userEmail) {
+        const isKnownPro = PRO_ACCOUNTS.some(account =>
+          state.userEmail.toLowerCase().includes(account.toLowerCase()) ||
+          account.toLowerCase().includes(state.userEmail.toLowerCase())
+        );
+        if (isKnownPro) {
+          console.log('👑 Recognized Pro user from local list:', state.userEmail);
+          state.subscription = { tier: 'pro', features: [] };
+        }
+      }
+      
       updateSubscriptionUI();
     }
     
