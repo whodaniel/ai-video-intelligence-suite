@@ -296,7 +296,24 @@ async function addToQueue(videos) {
         throw new Error('Not authorized: No token found. Please login.');
      }
 
-    const response = await apiClient.addToQueue(videos);
+    // Transform videos to match backend API format
+    const transformedVideos = videos.map(video => ({
+      youtubeVideoId: video.id,
+      title: video.title,
+      channelName: video.channelTitle || null,
+      thumbnailUrl: video.thumbnail || null,
+      durationSeconds: video.duration || null,
+      playlistId: video.playlistId || null,
+      metadata: {
+        description: video.description || null,
+        publishedAt: video.publishedAt || null,
+        url: video.url || `https://www.youtube.com/watch?v=${video.id}`,
+        viewCount: video.viewCount || null,
+        likeCount: video.likeCount || null
+      }
+    }));
+
+    const response = await apiClient.addToQueue(transformedVideos);
 
     // Backend returns videos with IDs - map them to include queueId
     const videosWithIds = response.data.videos.map((backendVideo, index) => ({
