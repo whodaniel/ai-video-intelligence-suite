@@ -301,9 +301,9 @@ class SubscriptionService {
       },
       tnf: {
         name: 'The New Fuse',
-        price: 30,
+        price: 49,
         period: 'month',
-        yearlyPrice: 300,
+        yearlyPrice: 490,
         yearlyDiscount: '17%',
         description: 'Separate premium product suite',
         isExternalProduct: true,
