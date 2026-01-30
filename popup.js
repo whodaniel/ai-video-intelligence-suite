@@ -234,11 +234,31 @@ function populatePlaylistDropdowns() {
     ai_studio: 'Full video analysis using your Google AI Studio account. Best quality, uses segments for long videos.'
   };
 
-  // Update description when processing level changes
+  // Filter processing options by tier
   const processingLevelSelect = document.getElementById('processingLevel');
   const processingDescription = document.getElementById('processingDescription');
 
-  if (processingLevelSelect && processingDescription) {
+  if (processingLevelSelect && processingDescription && state.subscription) {
+    const tier = state.subscription.tier || 'free';
+
+    // Define which options are available per tier
+    const tierOptions = {
+      free: ['transcript', 'ai_studio'], // Free users: transcript only or use their own Gemini account
+      pro: ['transcript', 'flash', 'pro', 'ai_studio'], // Pro: all options
+      tnf: ['transcript', 'flash', 'pro', 'ai_studio'] // TNF: all options
+    };
+
+    const availableOptions = tierOptions[tier] || tierOptions.free;
+
+    // Remove unavailable options
+    Array.from(processingLevelSelect.options).forEach(option => {
+      if (!availableOptions.includes(option.value)) {
+        option.disabled = true;
+        option.textContent += ' (Pro/TNF only)';
+      }
+    });
+
+    // Update description when processing level changes
     processingLevelSelect.addEventListener('change', (e) => {
       const level = e.target.value;
       processingDescription.textContent = processingDescriptions[level];

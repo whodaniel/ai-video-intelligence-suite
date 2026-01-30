@@ -231,14 +231,13 @@ async function saveReportToBackend(taskResult) {
       return;
     }
 
-    const reportData = {
-      videoQueueId: video.queueId,
-      segmentIndex: taskResult.segmentIndex || 0,
-      contentMarkdown: taskResult.reportContent,
-      contentJson: {} // Parse content if needed
-    };
-
-    const response = await apiClient.createReport(reportData);
+    // Call createReport with individual parameters (not an object)
+    const response = await apiClient.createReport(
+      video.queueId,
+      taskResult.segmentIndex || 0,
+      taskResult.reportContent,
+      {} // Parse content if needed
+    );
     console.log('✅ Report saved to backend:', response.data);
   } catch (error) {
     console.error('Failed to save report:', error);
@@ -277,13 +276,20 @@ async function addToQueue(videos) {
      }
 
     const response = await apiClient.addToQueue(videos);
-    
-    // Sync local queue for UI
+
+    // Backend returns videos with IDs - map them to include queueId
+    const videosWithIds = response.data.videos.map((backendVideo, index) => ({
+      ...videos[index],
+      queueId: backendVideo.id, // Store backend ID as queueId
+      youtubeVideoId: backendVideo.youtube_video_id
+    }));
+
+    // Sync local queue for UI with backend IDs
     const { queue = [] } = await chrome.storage.local.get('queue');
-    const updatedQueue = [...queue, ...videos];
+    const updatedQueue = [...queue, ...videosWithIds];
     await chrome.storage.local.set({ queue: updatedQueue });
-    
-    console.log(`✅ Added ${videos.length} video(s) to queue via API. Total: ${updatedQueue.length}`);
+
+    console.log(`✅ Added ${videosWithIds.length} video(s) to queue via API. Total: ${updatedQueue.length}`);
     return updatedQueue;
   } catch (error) {
     if (error.message && error.message.includes('Daily quota exceeded')) {
@@ -415,18 +421,61 @@ async function closeTab(tabId) {
   }
 }
 
+// Process video based on selected processing level
+async function processVideoByLevel(video, processingLevel) {
+  console.log(`Processing with level: ${processingLevel}`);
+
+  switch (processingLevel) {
+    case 'transcript':
+      // Transcript-only: Use smart-processing-service
+      // Import and use the service (for now, return placeholder)
+      console.log('📝 Processing with transcript-only mode');
+      // TODO: Implement transcript-only extraction
+      return {
+        success: true,
+        content: `# ${video.title}\n\nTranscript-only processing not yet implemented.\nVideo ID: ${video.id}`,
+        method: 'transcript'
+      };
+
+    case 'flash':
+      console.log('⚡ Processing with Gemini Flash');
+      // TODO: Implement Gemini Flash API call via smart-processing-service
+      return {
+        success: true,
+        content: `# ${video.title}\n\nGemini Flash processing not yet implemented.\nVideo ID: ${video.id}`,
+        method: 'flash'
+      };
+
+    case 'pro':
+      console.log('🧠 Processing with Gemini Pro');
+      // TODO: Implement Gemini Pro API call via smart-processing-service
+      return {
+        success: true,
+        content: `# ${video.title}\n\nGemini Pro processing not yet implemented.\nVideo ID: ${video.id}`,
+        method: 'pro'
+      };
+
+    case 'ai_studio':
+    default:
+      // Use existing AI Studio automation (return null to signal "use existing flow")
+      return null;
+  }
+}
+
 // Main automation function - orchestrates the entire workflow
 async function startAutomation(config) {
   console.log('🎬 Starting automation orchestrator');
-  
+  console.log('Processing level:', config.processingLevel || 'ai_studio');
+
   const queue = config.queue || [];
   const segmentDuration = (config.segmentDuration || 45) * 60; // Convert to seconds
-  
+  const processingLevel = config.processingLevel || 'ai_studio';
+
   if (queue.length === 0) {
     console.log('⚠️ Empty queue');
     return { error: 'No videos in queue' };
   }
-  
+
   automationRunning = true;
   automationPaused = false;
   
@@ -473,7 +522,7 @@ async function startAutomation(config) {
     });
     
     chrome.action.setBadgeText({ text: `${videoIndex + 1}/${queue.length}` });
-    
+
     // Broadcast progress to popup
     chrome.runtime.sendMessage({
       type: 'PROGRESS_UPDATE',
@@ -488,8 +537,26 @@ async function startAutomation(config) {
         }
       }
     }).catch(() => {});
-    
+
     try {
+      // Check if using alternative processing method
+      const alternativeResult = await processVideoByLevel(video, processingLevel);
+
+      if (alternativeResult) {
+        // Used alternative method (transcript/flash/pro)
+        console.log(`✅ Video processed with ${alternativeResult.method} method`);
+
+        // Send result as if it came from content script
+        await saveReportToBackend({
+          videoId: video.id,
+          segmentIndex: 0,
+          reportContent: alternativeResult.content
+        }).catch(err => console.error('Failed to save:', err));
+
+        continue; // Skip to next video
+      }
+
+      // Otherwise, use existing AI Studio automation flow
       // STEP 1: Get video duration (if not already known)
       let duration = video.duration || 0;
       
