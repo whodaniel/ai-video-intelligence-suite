@@ -98,25 +98,35 @@ const elements = {
 // Initialize popup
 async function init() {
   console.log('Initializing popup...');
-  
+
   try {
     // Check authentication
     const isAuth = await checkAuthentication();
-    
+
     if (isAuth) {
       await loadUserData();
-      await loadPlaylists();
-      showMainInterface();
+
+      // Check if there's an active processing queue
+      const { processingState } = await chrome.storage.local.get('processingState');
+
+      if (processingState && processingState.isProcessing) {
+        // Show processing view by default when actively processing
+        showProcessingView();
+      } else {
+        // Show main interface for queue selection
+        await loadPlaylists();
+        showMainInterface();
+      }
     } else {
       showAuthPanel();
     }
-    
+
     // Set up event listeners
     setupEventListeners();
-    
-    // Load processing state if active
+
+    // Load processing state if active (for updates)
     await checkProcessingState();
-    
+
     console.log('✅ Popup initialized');
   } catch (error) {
     console.error('Failed to initialize popup:', error);

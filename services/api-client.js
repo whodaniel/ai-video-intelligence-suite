@@ -14,18 +14,33 @@ class APIClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
-      ...options,
-      headers
-    });
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        ...options,
+        headers
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error?.message || 'API request failed');
+      if (!response.ok) {
+        console.error('API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: data,
+          endpoint: endpoint
+        });
+        throw new Error(data.error?.message || data.message || `API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API Request Failed:', {
+        endpoint: `${this.baseURL}${endpoint}`,
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
     }
-
-    return data;
   }
 
   async getToken() {

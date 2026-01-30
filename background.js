@@ -870,7 +870,7 @@ async function handleAuthSuccess(token) {
 
   youtubeAccessToken = token;
   // Set expiry to 50 minutes to be safe (tokens usually last 60)
-  youtubeTokenExpiry = Date.now() + (50 * 60 * 1000); 
+  youtubeTokenExpiry = Date.now() + (50 * 60 * 1000);
 
   let userProfile = null;
   try {
@@ -885,13 +885,31 @@ async function handleAuthSuccess(token) {
     console.warn('⚠️ Could not fetch user profile:', e);
   }
 
-  // Save to storage
+  // Save YouTube auth to storage
   await chrome.storage.local.set({
     youtubeToken: token,
     youtubeTokenExpiry: youtubeTokenExpiry,
     userProfile: userProfile,
     isAuthenticated: true // Explicit flag
   });
+
+  // Sync with backend authentication to get JWT token
+  if (userProfile) {
+    try {
+      console.log('🔄 Syncing authentication with backend...');
+      const backendAuth = await apiClient.login({
+        googleId: userProfile.id,
+        email: userProfile.email,
+        displayName: userProfile.name,
+        avatarUrl: userProfile.picture
+      });
+      console.log('✅ Backend authentication successful, JWT token stored');
+    } catch (backendError) {
+      console.error('⚠️ Backend authentication failed:', backendError);
+      // Don't fail the whole auth flow - YouTube auth is still valid
+      // User can still use AI Studio mode without backend features
+    }
+  }
 
   console.log('✅ Auth successful and saved.');
   return { authenticated: true, token: token, userProfile };
