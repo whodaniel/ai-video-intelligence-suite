@@ -865,36 +865,108 @@ async function authenticateWithWebFlow() {
   console.log('🌐 Starting Web Auth Flow with authorization code...');
   const manifest = chrome.runtime.getManifest();
   const clientId = manifest.oauth2.client_id;
-  const redirectUri = chrome.identity.getRedirectURL(); // Should be https://<ext-id>.chromiumapp.org/
+  const redirectUri = chrome.identity.getRedirectURL();
   const scopes = encodeURIComponent(manifest.oauth2.scopes.join(' '));
 
-  // Use authorization code flow (response_type=code) instead of implicit flow (response_type=token)
-  // This allows us to exchange the code for BOTH access token AND refresh token on the backend
-  const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scopes}&access_type=offline&prompt=consent`;
+  // Try new authorization code flow first (for refresh tokens)
+  try {
+    console.log('📋 Attempting authorization code flow (new)...');
+    const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scopes}&access_type=offline&prompt=consent`;
 
-  // access_type=offline: Request refresh token
-  // prompt=consent: Force consent screen to ensure we get a refresh token (required for offline access)
+    const redirectUrl = await chrome.identity.launchWebAuthFlow({
+      url: authUrl,
+      interactive: true
+    });
 
-  const redirectUrl = await chrome.identity.launchWebAuthFlow({
-    url: authUrl,
-    interactive: true
-  });
+    if (redirectUrl) {
+      const url = new URL(redirectUrl);
+      const code = url.searchParams.get('code');
 
-  if (redirectUrl) {
-    // Parse authorization code from the redirect URL
-    const url = new URL(redirectUrl);
-    const code = url.searchParams.get('code');
-
-    if (code) {
-      console.log('✅ Authorization code received, exchanging for tokens...');
-      return await exchangeCodeForTokens(code);
-    } else {
-      console.error('❌ No authorization code in redirect URL:', redirectUrl);
-      throw new Error('Authorization code not found in redirect URL');
+      if (code) {
+        console.log('✅ Authorization code received, exchanging for tokens...');
+        return await exchangeCodeForTokens(code);
+      }
     }
+  } catch (codeFlowError) {
+    console.warn('⚠️ Authorization code flow failed, falling back to implicit flow:', codeFlowError.message);
+
+    // FALLBACK: Use implicit flow (old method) - works but no refresh token
+    console.log('🔄 Falling back to implicit flow (temporary)...');
+    const fallbackAuthUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}&prompt=select_account`;
+
+    const fallbackRedirectUrl = await chrome.identity.launchWebAuthFlow({
+      url: fallbackAuthUrl,
+      interactive: true
+    });
+
+    if (fallbackRedirectUrl) {
+      const params = new URLSearchParams(new URL(fallbackRedirectUrl).hash.substring(1));
+      const token = params.get('access_token');
+
+      if (token) {
+        console.log('✅ Access token received via fallback flow');
+        return await handleAuthSuccessFallback(token);
+      }
+    }
+
+    throw new Error('Both auth flows failed');
   }
 
   throw new Error('Web auth flow failed to return redirect URL');
+}
+
+async function handleAuthSuccessFallback(token) {
+  console.log('🔄 Using fallback authentication (no refresh token available)');
+
+  if (!token || typeof token !== 'string') {
+    throw new Error('Invalid token type');
+  }
+
+  youtubeAccessToken = token;
+  youtubeTokenExpiry = Date.now() + (50 * 60 * 1000); // 50 minutes
+
+  let userProfile = null;
+  try {
+    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (response.ok) {
+      userProfile = await response.json();
+      console.log(`✅ Authenticated as: ${userProfile.email} (fallback mode)`);
+    }
+  } catch (e) {
+    console.warn('⚠️ Could not fetch user profile:', e);
+  }
+
+  // Save YouTube auth to storage
+  await chrome.storage.local.set({
+    youtubeToken: token,
+    youtubeTokenExpiry: youtubeTokenExpiry,
+    userProfile: userProfile,
+    isAuthenticated: true
+  });
+
+  // Try to sync with backend using old endpoint (may not have refresh token support)
+  if (userProfile) {
+    try {
+      console.log('🔄 Syncing with backend (old endpoint)...');
+      const backendAuth = await apiClient.login({
+        googleId: userProfile.id,
+        email: userProfile.email,
+        displayName: userProfile.name,
+        avatarUrl: userProfile.picture
+      });
+      console.log('✅ Backend sync successful');
+    } catch (backendError) {
+      console.error('⚠️ Backend sync failed:', backendError);
+      // Continue anyway - fallback mode
+    }
+  }
+
+  console.log('⚠️ FALLBACK MODE: You will need to re-authenticate every hour');
+  console.log('   Backend deployment in progress - refresh token support coming soon');
+
+  return { authenticated: true, token: token, userProfile, fallbackMode: true };
 }
 
 async function exchangeCodeForTokens(authorizationCode) {
