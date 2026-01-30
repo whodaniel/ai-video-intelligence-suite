@@ -3,7 +3,7 @@ class APIClient {
     this.baseURL = 'https://backend-production-ee16.up.railway.app/api';
   }
 
-  async request(endpoint, options = {}) {
+  async request(endpoint, options = {}, retryCount = 0) {
     const token = await this.getToken();
     const headers = {
       'Content-Type': 'application/json',
@@ -23,12 +23,43 @@ class APIClient {
       const data = await response.json();
 
       if (!response.ok) {
+        // Handle 401 Unauthorized - token may be expired
+        if (response.status === 401 && retryCount === 0) {
+          console.warn('⚠️ 401 Unauthorized - JWT token may be expired');
+
+          // Try to get user profile again to refresh JWT
+          const stored = await chrome.storage.local.get(['userProfile']);
+          if (stored.userProfile) {
+            console.log('🔄 Attempting to refresh JWT token...');
+            try {
+              await this.login({
+                googleId: stored.userProfile.id,
+                email: stored.userProfile.email,
+                displayName: stored.userProfile.name,
+                avatarUrl: stored.userProfile.picture
+              });
+
+              // Retry the original request with new token
+              console.log('✅ JWT refreshed, retrying original request...');
+              return await this.request(endpoint, options, retryCount + 1);
+            } catch (refreshError) {
+              console.error('❌ Failed to refresh JWT:', refreshError);
+              // Clear auth state
+              await chrome.storage.local.set({
+                token: null,
+                isAuthenticated: false
+              });
+            }
+          }
+        }
+
         console.error('API Error Response:', JSON.stringify({
           status: response.status,
           statusText: response.statusText,
           data: data,
           endpoint: endpoint
         }, null, 2));
+
         throw new Error(data.error?.message || data.message || `API request failed: ${response.status} ${response.statusText}`);
       }
 

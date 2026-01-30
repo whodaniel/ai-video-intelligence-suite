@@ -6,7 +6,7 @@ console.log('🚀 AI Video Intelligence Suite - Background Service Worker Starti
 // Initialize extension on install
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('Extension installed/updated:', details.reason);
-  
+
   if (details.reason === 'install') {
     // First time installation
     await initializeExtension();
@@ -15,6 +15,27 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     // Extension updated
     const manifest = chrome.runtime.getManifest();
     console.log(`Updated to version ${manifest.version}`);
+  }
+
+  // Set up periodic token refresh check (every 10 minutes)
+  chrome.alarms.create('tokenRefreshCheck', { periodInMinutes: 10 });
+  console.log('⏰ Token refresh alarm created');
+});
+
+// Handle periodic token refresh checks
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'tokenRefreshCheck') {
+    console.log('⏰ Running periodic token refresh check...');
+    try {
+      const refreshed = await refreshAccessTokenIfNeeded();
+      if (refreshed) {
+        console.log('✅ Token refreshed during periodic check');
+      } else {
+        console.log('✓ Token still valid, no refresh needed');
+      }
+    } catch (error) {
+      console.error('❌ Periodic token refresh check failed:', error);
+    }
   }
 });
 
@@ -841,31 +862,93 @@ async function authenticateYouTube() {
 }
 
 async function authenticateWithWebFlow() {
-  console.log('🌐 Starting Web Auth Flow...');
+  console.log('🌐 Starting Web Auth Flow with authorization code...');
   const manifest = chrome.runtime.getManifest();
   const clientId = manifest.oauth2.client_id;
   const redirectUri = chrome.identity.getRedirectURL(); // Should be https://<ext-id>.chromiumapp.org/
   const scopes = encodeURIComponent(manifest.oauth2.scopes.join(' '));
-  
-  const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}&prompt=select_account`;
-  
-  // prompt=select_account forces the user to see the account picker, preventing auto-login loops.
+
+  // Use authorization code flow (response_type=code) instead of implicit flow (response_type=token)
+  // This allows us to exchange the code for BOTH access token AND refresh token on the backend
+  const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scopes}&access_type=offline&prompt=consent`;
+
+  // access_type=offline: Request refresh token
+  // prompt=consent: Force consent screen to ensure we get a refresh token (required for offline access)
 
   const redirectUrl = await chrome.identity.launchWebAuthFlow({
     url: authUrl,
     interactive: true
   });
-  
+
   if (redirectUrl) {
-    const params = new URLSearchParams(new URL(redirectUrl).hash.substring(1));
-    const token = params.get('access_token');
-    
-    if (token) {
-      return await handleAuthSuccess(token);
+    // Parse authorization code from the redirect URL
+    const url = new URL(redirectUrl);
+    const code = url.searchParams.get('code');
+
+    if (code) {
+      console.log('✅ Authorization code received, exchanging for tokens...');
+      return await exchangeCodeForTokens(code);
+    } else {
+      console.error('❌ No authorization code in redirect URL:', redirectUrl);
+      throw new Error('Authorization code not found in redirect URL');
     }
   }
-  
-  throw new Error('Web auth flow failed to return token');
+
+  throw new Error('Web auth flow failed to return redirect URL');
+}
+
+async function exchangeCodeForTokens(authorizationCode) {
+  console.log('🔄 Exchanging authorization code for access + refresh tokens...');
+
+  try {
+    // Get the redirect URI that was used in the auth request
+    const redirectUri = chrome.identity.getRedirectURL();
+    console.log(`   - Using redirect URI: ${redirectUri}`);
+
+    // Send the authorization code to our backend to exchange for tokens
+    // The backend has the client secret needed for this exchange
+    const response = await apiClient.request('/auth/google/exchange-code', {
+      method: 'POST',
+      body: JSON.stringify({
+        code: authorizationCode,
+        redirectUri: redirectUri
+      })
+    });
+
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to exchange authorization code');
+    }
+
+    const { accessToken, refreshToken, expiresIn, user, jwtToken } = response.data;
+
+    console.log('✅ Received tokens from backend');
+
+    // Calculate expiry time (use actual expires_in from Google, or default to 3600 seconds)
+    const expiryMs = (expiresIn || 3600) * 1000;
+    const tokenExpiry = Date.now() + expiryMs - (10 * 60 * 1000); // Subtract 10 min buffer
+
+    // Store access token in memory and storage
+    youtubeAccessToken = accessToken;
+    youtubeTokenExpiry = tokenExpiry;
+
+    await chrome.storage.local.set({
+      youtubeToken: accessToken,
+      youtubeTokenExpiry: tokenExpiry,
+      userProfile: user,
+      isAuthenticated: true,
+      token: jwtToken // JWT token for backend API calls
+    });
+
+    console.log('✅ Authentication complete, tokens stored');
+    console.log(`✅ Authenticated as: ${user.email}`);
+    console.log(`⏰ Access token expires in ${Math.round(expiryMs / 60000)} minutes`);
+
+    return { authenticated: true, token: accessToken, userProfile: user };
+
+  } catch (error) {
+    console.error('❌ Failed to exchange authorization code:', error);
+    throw new Error(`Token exchange failed: ${error.message}`);
+  }
 }
 
 async function handleAuthSuccess(token) {
@@ -920,35 +1003,123 @@ async function handleAuthSuccess(token) {
   return { authenticated: true, token: token, userProfile };
 }
 
-// Check ONLY if we have a valid session in storage. Do NOT attempt to login.
+// Automatically refresh token when it's about to expire
+async function refreshAccessTokenIfNeeded() {
+  try {
+    const now = Date.now();
+    const stored = await chrome.storage.local.get(['youtubeToken', 'youtubeTokenExpiry', 'token']);
+
+    // Check if token exists and is about to expire (within 5 minutes)
+    if (stored.youtubeToken && stored.youtubeTokenExpiry) {
+      const timeUntilExpiry = stored.youtubeTokenExpiry - now;
+      const fiveMinutes = 5 * 60 * 1000;
+
+      if (timeUntilExpiry < fiveMinutes && timeUntilExpiry > 0) {
+        console.log('⏰ Access token expiring soon, refreshing...');
+        await refreshAccessToken();
+        return true;
+      } else if (timeUntilExpiry <= 0) {
+        console.log('⏰ Access token expired, refreshing...');
+        await refreshAccessToken();
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error('❌ Failed to check/refresh token:', error);
+    return false;
+  }
+}
+
+// Refresh the access token using the refresh token stored on backend
+async function refreshAccessToken() {
+  try {
+    console.log('🔄 Requesting new access token from backend...');
+
+    const response = await apiClient.request('/auth/refresh-token', {
+      method: 'POST'
+    });
+
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to refresh token');
+    }
+
+    const { accessToken, expiresIn } = response.data;
+
+    // Update tokens in memory and storage
+    const expiryMs = (expiresIn || 3600) * 1000;
+    const newExpiry = Date.now() + expiryMs - (10 * 60 * 1000); // Subtract 10 min buffer
+
+    youtubeAccessToken = accessToken;
+    youtubeTokenExpiry = newExpiry;
+
+    await chrome.storage.local.set({
+      youtubeToken: accessToken,
+      youtubeTokenExpiry: newExpiry
+    });
+
+    console.log(`✅ Access token refreshed successfully (expires in ${Math.round(expiryMs / 60000)} min)`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ Failed to refresh access token:', error);
+    console.log('   User will need to sign in again');
+
+    // Clear invalid tokens
+    youtubeAccessToken = null;
+    youtubeTokenExpiry = null;
+    await chrome.storage.local.set({
+      youtubeToken: null,
+      youtubeTokenExpiry: null,
+      isAuthenticated: false
+    });
+
+    throw error;
+  }
+}
+
+// Check ONLY if we have a valid session in storage. Auto-refresh if needed.
 async function isYouTubeAuthenticated() {
   try {
     const now = Date.now();
-    
+
     // 1. Check Memory (fastest)
     if (youtubeAccessToken && youtubeTokenExpiry && now < youtubeTokenExpiry) {
+      // Token still valid, but check if it needs refreshing soon
+      await refreshAccessTokenIfNeeded();
       return { authenticated: true };
     }
-    
+
     // 2. Check Storage
     const stored = await chrome.storage.local.get([
-      'youtubeToken', 
+      'youtubeToken',
       'youtubeTokenExpiry',
       'isAuthenticated'
     ]);
-    
+
     if (stored.isAuthenticated && stored.youtubeToken && stored.youtubeTokenExpiry) {
       if (now < stored.youtubeTokenExpiry) {
         // Restore to memory
         youtubeAccessToken = stored.youtubeToken;
         youtubeTokenExpiry = stored.youtubeTokenExpiry;
+
+        // Auto-refresh if needed
+        await refreshAccessTokenIfNeeded();
+
         return { authenticated: true };
       } else {
-        console.log('⏰ Token expired in storage.');
-        return { authenticated: false };
+        console.log('⏰ Token expired, attempting automatic refresh...');
+        try {
+          await refreshAccessToken();
+          return { authenticated: true };
+        } catch (refreshError) {
+          console.log('❌ Automatic refresh failed, user needs to sign in again');
+          return { authenticated: false };
+        }
       }
     }
-    
+
     return { authenticated: false };
   } catch (error) {
     console.error('Error checking auth status:', error);
@@ -1058,40 +1229,67 @@ async function getPlaylistVideos(playlistId) {
 async function signOutYouTube() {
   try {
     console.log('🚪 Signing out...');
-    
-    // 1. Clear Chrome Identity Cache (Best effort)
-    if (youtubeAccessToken) {
-       // Also try to revoke it for good measure?
-       try {
-         await fetch('https://oauth2.googleapis.com/revoke?token=' + youtubeAccessToken, {
-           method: 'POST',
-           headers: { 'Content-type': 'application/x-www-form-urlencoded' }
-         });
-       } catch(e) {}
-       
-       await chrome.identity.removeCachedAuthToken({ token: youtubeAccessToken });
+
+    // 1. Logout from backend API to invalidate JWT session
+    try {
+      console.log('🔄 Logging out from backend...');
+      await apiClient.request('/auth/logout', { method: 'POST' });
+      console.log('✅ Backend logout successful');
+    } catch (backendError) {
+      console.warn('⚠️ Backend logout failed (non-critical):', backendError.message);
+      // Continue with logout even if backend call fails
     }
 
-    // 2. Clear Memory
+    // 2. Revoke Google OAuth token
+    if (youtubeAccessToken) {
+      try {
+        console.log('🔄 Revoking Google OAuth token...');
+        const revokeResponse = await fetch('https://oauth2.googleapis.com/revoke?token=' + youtubeAccessToken, {
+          method: 'POST',
+          headers: { 'Content-type': 'application/x-www-form-urlencoded' }
+        });
+        if (revokeResponse.ok) {
+          console.log('✅ Google OAuth token revoked');
+        } else {
+          console.warn('⚠️ Google token revocation returned:', revokeResponse.status);
+        }
+      } catch (revokeError) {
+        console.warn('⚠️ Failed to revoke Google token:', revokeError.message);
+      }
+
+      // 3. Clear Chrome Identity Cache
+      try {
+        await chrome.identity.removeCachedAuthToken({ token: youtubeAccessToken });
+        console.log('✅ Chrome identity cache cleared');
+      } catch (cacheError) {
+        console.warn('⚠️ Failed to clear identity cache:', cacheError.message);
+      }
+    }
+
+    // 4. Clear Memory
     youtubeAccessToken = null;
     youtubeTokenExpiry = null;
 
-    // 3. Clear Storage - NUKE IT ALL related to auth
+    // 5. Clear Storage - NUKE IT ALL related to auth
     await chrome.storage.local.remove([
       'youtubeToken',
       'youtubeTokenExpiry',
       'userProfile',
       'lastAuthAccount',
-      'isAuthenticated', // Clear the flag
-      'token', // Backend API token
+      'isAuthenticated',
+      'token', // Backend JWT token
       'preferWebAuth',
-      'userExplicitlySignedOut' // No longer needed with this logic, but clear it anyway
+      'userExplicitlySignedOut'
     ]);
 
-    console.log('✅ Signed out completely.');
+    console.log('✅ Signed out completely - all tokens cleared');
     return { signedOut: true };
   } catch (error) {
-    console.error('❌ Error signing out:', error);
+    console.error('❌ Error during sign out:', error);
+    // Even if errors occurred, try to clear local state
+    youtubeAccessToken = null;
+    youtubeTokenExpiry = null;
+    await chrome.storage.local.clear();
     throw error;
   }
 }
