@@ -23,22 +23,22 @@ class APIClient {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error('API Error Response:', {
+        console.error('API Error Response:', JSON.stringify({
           status: response.status,
           statusText: response.statusText,
           data: data,
           endpoint: endpoint
-        });
+        }, null, 2));
         throw new Error(data.error?.message || data.message || `API request failed: ${response.status} ${response.statusText}`);
       }
 
       return data;
     } catch (error) {
-      console.error('API Request Failed:', {
+      console.error('API Request Failed:', JSON.stringify({
         endpoint: `${this.baseURL}${endpoint}`,
         error: error.message,
         stack: error.stack
-      });
+      }, null, 2));
       throw error;
     }
   }
