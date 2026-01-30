@@ -183,8 +183,8 @@ router.get('/pricing', (req, res) => {
         },
         tnf: {
           name: 'The New Fuse',
-          monthly: 49,
-          yearly: 490,
+          monthly: 30,
+          yearly: 300,
           yearlyDiscount: '17%',
           description: 'Separate premium product suite',
           isExternalProduct: true,
