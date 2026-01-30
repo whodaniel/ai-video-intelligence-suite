@@ -109,17 +109,25 @@ async function init() {
       // Check if there's an active processing queue
       const { processingState } = await chrome.storage.local.get('processingState');
 
-      if (processingState && processingState.isProcessing) {
+      // Only show processing view if actively processing AND not completed
+      const isActivelyProcessing = processingState &&
+                                   processingState.isProcessing &&
+                                   processingState.currentIndex < processingState.totalCount;
+
+      if (isActivelyProcessing) {
         // Show processing view by default when actively processing
         showProcessingView();
       } else {
-        // Show main interface for queue selection
+        // Show main interface for queue selection (default)
         await loadPlaylists();
         showMainInterface();
       }
     } else {
       showAuthPanel();
     }
+
+    // Update sign out button visibility
+    updateSignOutButtonVisibility(isAuth);
 
     // Set up event listeners
     setupEventListeners();
@@ -131,6 +139,31 @@ async function init() {
   } catch (error) {
     console.error('Failed to initialize popup:', error);
     showError('Failed to initialize. Please refresh.');
+  }
+}
+
+// Update sign out button visibility based on auth status
+function updateSignOutButtonVisibility(isAuthenticated) {
+  const signOutBtn = document.getElementById('signOutBtn');
+  const settingsEmail = document.getElementById('settingsEmail');
+  
+  if (signOutBtn) {
+    if (isAuthenticated) {
+      signOutBtn.classList.remove('hidden');
+      signOutBtn.style.display = 'inline-block';
+    } else {
+      signOutBtn.classList.add('hidden');
+      signOutBtn.style.display = 'none';
+    }
+  }
+  
+  // Also update settings email display
+  if (settingsEmail) {
+    if (isAuthenticated && state.userEmail) {
+      settingsEmail.textContent = state.userEmail;
+    } else {
+      settingsEmail.textContent = 'Not signed in';
+    }
   }
 }
 
@@ -486,18 +519,31 @@ function updateSubscriptionUI() {
   if (!state.subscription) return;
   
   const { tier, features } = state.subscription;
+  const effectiveTier = tier || 'free';
   
   // Update tier badge (with safety check)
-  if (tier && elements.tierBadge) {
-    elements.tierBadge.textContent = tier.toUpperCase();
-    elements.tierBadge.className = `tier-badge tier-${tier}`;
+  if (elements.tierBadge) {
+    elements.tierBadge.textContent = effectiveTier.toUpperCase();
+    elements.tierBadge.className = `tier-badge tier-${effectiveTier}`;
   }
   
-  // Show/hide usage stats for free tier
-  if (tier === 'free' && elements.usageStats) {
-    elements.usageStats.classList.remove('hidden');
-  } else if (elements.usageStats) {
-    elements.usageStats.classList.add('hidden');
+  // Show/hide usage stats and upgrade prompt based on tier
+  const usageStats = document.getElementById('usageStats');
+  const upgradePrompt = document.getElementById('upgradePrompt');
+  
+  if (effectiveTier === 'free') {
+    if (usageStats) usageStats.classList.remove('hidden');
+    if (upgradePrompt) upgradePrompt.classList.remove('hidden');
+  } else {
+    // Pro/TNF users - hide usage stats and upgrade button
+    if (usageStats) usageStats.classList.add('hidden');
+    if (upgradePrompt) upgradePrompt.classList.add('hidden');
+  }
+  
+  // Also update settings modal tier display
+  const settingsTier = document.getElementById('settingsTier');
+  if (settingsTier) {
+    settingsTier.textContent = effectiveTier.toUpperCase();
   }
 }
 
@@ -740,6 +786,7 @@ function setupEventListeners() {
     if (confirm('Are you sure you want to sign out?')) {
       await chrome.runtime.sendMessage({ type: 'YOUTUBE_SIGN_OUT' });
       state.authenticated = false;
+      state.userEmail = null;
       
       // Close modal
       elements.settingsModal.classList.add('hidden');
@@ -747,7 +794,10 @@ function setupEventListeners() {
       // Reset state
       state.playlists = [];
       state.user = null;
+      state.subscription = null;
       
+      // Update UI
+      updateSignOutButtonVisibility(false);
       showAuthPanel();
     }
   });
