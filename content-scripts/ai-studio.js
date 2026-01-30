@@ -235,17 +235,65 @@ async function addYouTubeVideo(url, startTime = 0, endTime = null) {
 
   await sleep(1500);
 
-  let insertBtn = document.querySelector('button[aria-label="Insert images, videos, audio, or files"]');
+  // Try multiple selectors for the Insert button (AI Studio UI changes frequently)
+  let insertBtn = null;
+
+  // Strategy 1: aria-label variations
+  const ariaLabels = [
+    'Insert images, videos, audio, or files',
+    'Insert',
+    'Add files',
+    'Upload'
+  ];
+
+  for (const label of ariaLabels) {
+    insertBtn = document.querySelector(`button[aria-label*="${label}" i]`);
+    if (insertBtn) {
+      sendLog(`Found Insert button with aria-label containing: ${label}`, 'success');
+      break;
+    }
+  }
+
+  // Strategy 2: Icon-based search (Material icons)
   if (!insertBtn) {
     const buttons = Array.from(document.querySelectorAll('button'));
-    insertBtn = buttons.find(b =>
-      b.querySelector('span')?.textContent?.includes('note_add') ||
-      b.textContent.includes('note_add')
-    );
+    insertBtn = buttons.find(b => {
+      const text = b.textContent || '';
+      const ariaLabel = b.getAttribute('aria-label') || '';
+      // Common Material icon names for insert/upload
+      return text.includes('note_add') ||
+             text.includes('add_circle') ||
+             text.includes('upload') ||
+             ariaLabel.toLowerCase().includes('insert') ||
+             ariaLabel.toLowerCase().includes('add');
+    });
+    if (insertBtn) sendLog('Found Insert button via icon search', 'success');
+  }
+
+  // Strategy 3: Position-based (usually near the bottom of chat)
+  if (!insertBtn) {
+    const buttons = Array.from(document.querySelectorAll('button'));
+    // Look for buttons in a toolbar/action area (common pattern)
+    insertBtn = buttons.find(b => {
+      const parent = b.parentElement;
+      return parent && (
+        parent.classList.contains('toolbar') ||
+        parent.classList.contains('actions') ||
+        parent.getAttribute('role') === 'toolbar'
+      );
+    });
+    if (insertBtn) sendLog('Found Insert button via position', 'success');
   }
 
   if (!insertBtn) {
-    throw new Error('Insert button not found');
+    // Log all button aria-labels for debugging
+    const allButtons = Array.from(document.querySelectorAll('button'));
+    const buttonInfo = allButtons.slice(0, 10).map(b => ({
+      text: b.textContent?.substring(0, 30),
+      aria: b.getAttribute('aria-label')?.substring(0, 50)
+    }));
+    sendLog(`Available buttons (first 10): ${JSON.stringify(buttonInfo)}`, 'debug');
+    throw new Error('Insert button not found after trying all strategies');
   }
 
   await clickElement(insertBtn, 'Insert button');

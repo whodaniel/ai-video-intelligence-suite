@@ -182,21 +182,28 @@ async function handleMessage(message, sender) {
     case 'PROGRESS_UPDATE':
     case 'AUTOMATION_ERROR':
     case 'AUTOMATION_COMPLETE':
+    case 'TASK_COMPLETE':
+    case 'TASK_ERROR':
+    case 'CONTENT_SCRIPT_READY':
       // Update badge based on message type
-      if (type === 'AUTOMATION_ERROR') {
-        console.error('🚨 Automation Error:', message.error);
+      if (type === 'AUTOMATION_ERROR' || type === 'TASK_ERROR') {
+        console.error('🚨 Automation Error:', message.error || message.message);
         chrome.action.setBadgeText({ text: '!' });
         chrome.action.setBadgeBackgroundColor({ color: '#ef4444' }); // Red for error
       } else if (type === 'PROGRESS_UPDATE' && message.current !== undefined) {
         chrome.action.setBadgeText({ text: `${message.current}/${message.total}` });
       } else if (type === 'LOG') {
         console.log('📝 Content Log:', message.message);
+      } else if (type === 'CONTENT_SCRIPT_READY') {
+        console.log('📢 Content script ready:', message.url);
+      } else if (type === 'TASK_COMPLETE') {
+        console.log('✅ Task completed');
       }
-      
+
       // forward to popup (ignore error if popup closed)
       chrome.runtime.sendMessage(message).catch(() => {});
       return { success: true };
-    
+
     default:
       console.warn('⚠️ Unknown message type:', type);
       return { warning: `Unknown message type: ${type}` };
