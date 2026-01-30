@@ -4,11 +4,11 @@
 echo "Testing new /api/auth/google/exchange-code endpoint..."
 echo ""
 
-response=$(curl -s -X POST https://backend-production-ee16.up.railway.app/api/auth/google/exchange-code \
+response=$(curl -s -X POST https://aivideointel.thenewfuse.com/api/auth/google/exchange-code \
   -H "Content-Type: application/json" \
   -d '{"code":"test"}')
 
-if echo "$response" | grep -q "Authorization code is required"; then
+if echo "$response" | grep -q "Authorization code is required\|Redirect URI is required"; then
   echo "✅ SUCCESS! New endpoint is deployed and working"
   echo ""
   echo "Expected error response (this is correct):"

@@ -1,6 +1,6 @@
 class APIClient {
   constructor() {
-    this.baseURL = 'https://backend-production-ee16.up.railway.app/api';
+    this.baseURL = 'https://aivideointel.thenewfuse.com/api';
   }
 
   async request(endpoint, options = {}, retryCount = 0) {
