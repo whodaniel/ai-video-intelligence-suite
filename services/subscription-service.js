@@ -7,7 +7,7 @@ class SubscriptionService {
     this.tiers = {
       free: 'free',
       pro: 'pro',
-      enterprise: 'enterprise'
+      tnf: 'tnf'
     };
   }
 
@@ -287,11 +287,15 @@ class SubscriptionService {
         features: [
           'Unlimited videos',
           '3 concurrent processes',
-          'Custom prompts (50)',
+          'Custom prompts (50 templates)',
           'NotebookLM integration',
-          'Podcast creation (5 podcasts)',
+          'Podcast creation (5/month)',
+          'Personal knowledge base browser',
+          'Topic extraction & organization',
           'Cloud sync',
           'Advanced retry logic',
+          'Auto-download reports',
+          'Analytics dashboard',
           'Priority support'
         ]
       },
@@ -301,11 +305,22 @@ class SubscriptionService {
         period: 'month',
         yearlyPrice: 300,
         yearlyDiscount: '17%',
+        description: 'Separate premium product suite',
+        isExternalProduct: true,
+        learnMoreUrl: 'https://thenewfuse.com',
         features: [
           'Everything in Pro',
+          'The New Fuse Chrome extension',
           '10 concurrent processes',
-          'Unlimited prompts',
+          'Unlimited custom prompts',
           'Unlimited podcasts',
+          'API access',
+          'RAG semantic search',
+          'Personal AI assistant',
+          'Agent integration',
+          'Knowledge base as agent memory',
+          'Team collaboration',
+          'White-label option',
           'Dedicated support'
         ]
       }

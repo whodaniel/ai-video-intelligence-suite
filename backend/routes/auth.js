@@ -43,12 +43,13 @@ router.post('/google', async (req, res) => {
       );
       user = result.rows[0];
       console.log('✅ New user created:', user.email);
+    } else {
       // Update existing user - preserve token if not provided
       result = await query(
         `UPDATE users
-         SET display_name = $1, 
-             avatar_url = $2, 
-             youtube_refresh_token_encrypted = COALESCE($3, youtube_refresh_token_encrypted), 
+         SET display_name = $1,
+             avatar_url = $2,
+             youtube_refresh_token_encrypted = COALESCE($3, youtube_refresh_token_encrypted),
              updated_at = NOW()
          WHERE google_id = $4
          RETURNING id, email, google_id, display_name, avatar_url, tier, created_at`,
@@ -84,12 +85,11 @@ router.post('/google', async (req, res) => {
     });
   } catch (error) {
     console.error('Auth error:', error);
-    console.error('Auth error:', error);
     res.status(500).json({
       success: false,
-      error: { 
+      error: {
         message: error.message || 'Authentication failed',
-        stack: process.env.NODE_ENV === 'development' ? error.stack : error.message // Expose message in prod for now
+        ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
       }
     });
   }
