@@ -14,7 +14,7 @@ const router = express.Router();
 router.get('/status', protect, async (req, res) => {
   try {
     const result = await query(
-      `SELECT s.*, u.tier, u.daily_usage, u.daily_limit
+      `SELECT s.*, u.tier as user_tier, u.daily_usage, u.daily_limit
        FROM subscriptions s
        RIGHT JOIN users u ON s.user_id = u.id
        WHERE u.id = $1 AND (s.status = 'active' OR s.id IS NULL)
@@ -23,7 +23,11 @@ router.get('/status', protect, async (req, res) => {
       [req.user.id]
     );
 
-    const subscription = result.rows[0] || { tier: 'free' };
+    const row = result.rows[0];
+    // Prioritize subscription tier if active, otherwise fallback to user tier (which might be pro via manual grant)
+    const tier = (row && row.status === 'active' && row.tier) ? row.tier : (row ? row.user_tier : 'free');
+    
+    const subscription = row ? { ...row, tier } : { tier: 'free' };
 
     // Get feature limits based on tier
     const features = getFeaturesByTier(subscription.tier);
