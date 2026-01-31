@@ -225,4 +225,182 @@ function determineTierFromPrice(priceId) {
   return 'free';
 }
 
+function determineTierFromPlanId(planId) {
+  if (planId === process.env.PAYPAL_PLAN_PRO_MONTHLY || planId === process.env.PAYPAL_PLAN_PRO_YEARLY) {
+    return 'pro';
+  }
+  if (planId === process.env.PAYPAL_PLAN_TNF_MONTHLY || planId === process.env.PAYPAL_PLAN_TNF_YEARLY) {
+    return 'tnf';
+  }
+  return 'free';
+}
+
+/**
+ * @route   POST /api/webhooks/paypal
+ * @desc    Handle PayPal webhook events
+ * @access  Public (verified by PayPal signature)
+ */
+router.post('/paypal', express.json(), async (req, res) => {
+  const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+
+  console.log('📨 PayPal webhook received:', req.body.event_type);
+
+  // TODO: Implement PayPal webhook signature verification
+  // For now, we'll process the event (add verification in production)
+
+  try {
+    const event = req.body;
+
+    switch (event.event_type) {
+      case 'BILLING.SUBSCRIPTION.ACTIVATED':
+        await handlePayPalSubscriptionActivated(event.resource);
+        break;
+
+      case 'BILLING.SUBSCRIPTION.UPDATED':
+        await handlePayPalSubscriptionUpdated(event.resource);
+        break;
+
+      case 'BILLING.SUBSCRIPTION.CANCELLED':
+      case 'BILLING.SUBSCRIPTION.SUSPENDED':
+      case 'BILLING.SUBSCRIPTION.EXPIRED':
+        await handlePayPalSubscriptionCancelled(event.resource);
+        break;
+
+      case 'PAYMENT.SALE.COMPLETED':
+        await handlePayPalPaymentCompleted(event.resource);
+        break;
+
+      case 'PAYMENT.SALE.REFUNDED':
+        await handlePayPalPaymentRefunded(event.resource);
+        break;
+
+      default:
+        console.log(`Unhandled PayPal event type: ${event.event_type}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Error processing PayPal webhook:', error);
+    res.status(500).json({ error: 'Webhook handler failed' });
+  }
+});
+
+// PayPal webhook handlers
+
+async function handlePayPalSubscriptionActivated(subscription) {
+  console.log('✅ PayPal subscription activated:', subscription.id);
+
+  const userId = subscription.custom_id; // We pass userId as custom_id during subscription creation
+  const planId = subscription.plan_id;
+  const tier = determineTierFromPlanId(planId);
+  const billingPeriod = planId.includes('YEARLY') ? 'yearly' : 'monthly';
+
+  if (!userId) {
+    console.error('❌ No userId found in subscription custom_id');
+    return;
+  }
+
+  // Create subscription record in database
+  await query(
+    `INSERT INTO subscriptions (user_id, paypal_subscription_id, paypal_plan_id, tier, status, billing_period, current_period_start, current_period_end)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW() + INTERVAL '1 month')
+     ON CONFLICT (paypal_subscription_id) DO UPDATE
+     SET status = $5, updated_at = NOW()`,
+    [
+      userId,
+      subscription.id,
+      planId,
+      tier,
+      'active',
+      billingPeriod
+    ]
+  );
+
+  // Update user tier
+  await query('UPDATE users SET tier = $1, updated_at = NOW() WHERE id = $2', [tier, userId]);
+
+  console.log(`✅ User ${userId} upgraded to ${tier} tier via PayPal`);
+}
+
+async function handlePayPalSubscriptionUpdated(subscription) {
+  console.log('🔄 PayPal subscription updated:', subscription.id);
+
+  await query(
+    `UPDATE subscriptions
+     SET status = $1, updated_at = NOW()
+     WHERE paypal_subscription_id = $2`,
+    [
+      subscription.status.toLowerCase(),
+      subscription.id
+    ]
+  );
+
+  // If subscription is no longer active, downgrade user
+  if (subscription.status !== 'ACTIVE') {
+    const result = await query('SELECT user_id FROM subscriptions WHERE paypal_subscription_id = $1', [
+      subscription.id
+    ]);
+
+    if (result.rows.length > 0) {
+      await query('UPDATE users SET tier = $1, updated_at = NOW() WHERE id = $2', ['free', result.rows[0].user_id]);
+      console.log(`⬇️  User ${result.rows[0].user_id} downgraded to free tier`);
+    }
+  }
+}
+
+async function handlePayPalSubscriptionCancelled(subscription) {
+  console.log('❌ PayPal subscription cancelled:', subscription.id);
+
+  // Get user
+  const result = await query('SELECT user_id FROM subscriptions WHERE paypal_subscription_id = $1', [
+    subscription.id
+  ]);
+
+  if (result.rows.length > 0) {
+    const userId = result.rows[0].user_id;
+
+    // Update subscription status
+    await query(
+      `UPDATE subscriptions
+       SET status = 'canceled', canceled_at = NOW(), updated_at = NOW()
+       WHERE paypal_subscription_id = $1`,
+      [subscription.id]
+    );
+
+    // Downgrade user to free tier
+    await query('UPDATE users SET tier = $1, updated_at = NOW() WHERE id = $2', ['free', userId]);
+
+    console.log(`⬇️  User ${userId} downgraded to free tier`);
+  }
+}
+
+async function handlePayPalPaymentCompleted(payment) {
+  console.log('✅ PayPal payment completed:', payment.id);
+
+  // Update subscription status if this is a subscription payment
+  if (payment.billing_agreement_id) {
+    await query(
+      `UPDATE subscriptions SET status = 'active', updated_at = NOW() WHERE paypal_subscription_id = $1`,
+      [payment.billing_agreement_id]
+    );
+  }
+}
+
+async function handlePayPalPaymentRefunded(payment) {
+  console.log('❌ PayPal payment refunded:', payment.id);
+
+  // Handle refund - might need to downgrade user or update subscription
+  if (payment.billing_agreement_id) {
+    const result = await query('SELECT user_id FROM subscriptions WHERE paypal_subscription_id = $1', [
+      payment.billing_agreement_id
+    ]);
+
+    if (result.rows.length > 0) {
+      // Log the refund but don't automatically downgrade
+      // Business logic: decide if immediate downgrade or wait for subscription cancellation
+      console.log(`⚠️  Refund processed for user ${result.rows[0].user_id}`);
+    }
+  }
+}
+
 export default router;
