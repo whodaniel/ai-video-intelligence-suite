@@ -8,21 +8,9 @@ const router = express.Router();
 
 // Note: OAuth2 client is configured per-request with redirect URI from frontend
 
-// Known Pro accounts
-const PRO_ACCOUNTS = [
-  'bizsynth@gmail.com',
-  'startreetv-1705@pages.plusgoogle.com'
-];
-
-// Helper to determine tier based on email
+// Helper to determine tier based on email (deprecated/removed hardcoding)
 const getTierForEmail = (email) => {
-  if (!email) return 'free';
-  const normalizedEmail = email.toLowerCase().trim();
-  return PRO_ACCOUNTS.some(proEmail =>
-    normalizedEmail === proEmail.toLowerCase() ||
-    normalizedEmail.includes(proEmail.toLowerCase()) ||
-    proEmail.toLowerCase().includes(normalizedEmail)
-  ) ? 'pro' : 'free';
+  return 'free'; // Default to free for new users, database update required for Pro
 };
 
 // Generate JWT token
@@ -54,8 +42,8 @@ router.post('/google', async (req, res) => {
     let user;
 
     if (result.rows.length === 0) {
-      // Create new user with appropriate tier
-      const tier = getTierForEmail(email);
+      // Create new user (default to free)
+      const tier = 'free';
       result = await query(
         `INSERT INTO users (google_id, email, display_name, avatar_url, youtube_refresh_token_encrypted, tier)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -65,28 +53,19 @@ router.post('/google', async (req, res) => {
       user = result.rows[0];
       console.log(`✅ New user created: ${user.email} (tier: ${tier})`);
     } else {
-      // Update existing user - check if tier should be upgraded
-      const existingUser = result.rows[0];
-      const correctTier = getTierForEmail(email);
-      const shouldUpdateTier = existingUser.tier !== correctTier && correctTier === 'pro';
-
+      // Update existing user
       result = await query(
         `UPDATE users
          SET display_name = $1,
              avatar_url = $2,
              youtube_refresh_token_encrypted = COALESCE($3, youtube_refresh_token_encrypted),
-             tier = $5,
              updated_at = NOW()
          WHERE google_id = $4
          RETURNING id, email, google_id, display_name, avatar_url, tier, created_at`,
-        [displayName, avatarUrl, youtubeRefreshToken, googleId, shouldUpdateTier ? 'pro' : existingUser.tier]
+        [displayName, avatarUrl, youtubeRefreshToken, googleId]
       );
       user = result.rows[0];
-      if (shouldUpdateTier) {
-        console.log(`✅ User logged in and upgraded to Pro: ${user.email}`);
-      } else {
-        console.log(`✅ User logged in: ${user.email}`);
-      }
+      console.log(`✅ User logged in: ${user.email}`);
     }
 
     // Generate JWT token
@@ -190,8 +169,8 @@ router.post('/google/exchange-code', async (req, res) => {
     let user;
 
     if (result.rows.length === 0) {
-      // Create new user with refresh token and appropriate tier
-      const tier = getTierForEmail(googleUser.email);
+      // Create new user (default to free)
+      const tier = 'free';
       result = await query(
         `INSERT INTO users (google_id, email, display_name, avatar_url, youtube_refresh_token_encrypted, tier)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -201,29 +180,22 @@ router.post('/google/exchange-code', async (req, res) => {
       user = result.rows[0];
       console.log(`✅ New user created: ${user.email} (tier: ${tier})`);
     } else {
-      // Update existing user - check if tier should be upgraded
+      // Update existing user
       const existingUser = result.rows[0];
-      const correctTier = getTierForEmail(googleUser.email);
-      const shouldUpdateTier = existingUser.tier !== correctTier && correctTier === 'pro';
-
+      
       result = await query(
         `UPDATE users
          SET display_name = $1,
              avatar_url = $2,
              email = $3,
              youtube_refresh_token_encrypted = COALESCE($4, youtube_refresh_token_encrypted),
-             tier = $6,
              updated_at = NOW()
          WHERE google_id = $5
          RETURNING id, email, google_id, display_name, avatar_url, tier, created_at`,
-        [googleUser.name, googleUser.picture, googleUser.email, tokens.refresh_token, googleUser.id, shouldUpdateTier ? 'pro' : existingUser.tier]
+        [googleUser.name, googleUser.picture, googleUser.email, tokens.refresh_token, googleUser.id]
       );
       user = result.rows[0];
-      if (shouldUpdateTier) {
-        console.log(`✅ User logged in and upgraded to Pro: ${user.email}`);
-      } else {
-        console.log(`✅ User logged in: ${user.email}`);
-      }
+      console.log(`✅ User logged in: ${user.email}`);
     }
 
     // Generate JWT token for our API
