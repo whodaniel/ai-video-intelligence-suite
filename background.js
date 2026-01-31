@@ -156,10 +156,13 @@ async function handleMessage(message, sender) {
     // Subscription management
     case 'SUBSCRIPTION_CHECK':
       return await checkSubscription();
-      
+
     case 'SUBSCRIPTION_CAN_PROCESS':
       return await canProcessVideo();
-    
+
+    case 'SUBSCRIPTION_UPGRADE':
+      return await handleSubscriptionUpgrade(data);
+
     // Storage operations
     case 'STORAGE_GET':
       return await chrome.storage.local.get(data.keys);
@@ -1495,17 +1498,53 @@ async function canProcessVideo() {
       'dailyUsage',
       'dailyLimit'
     ]);
-    
+
     // Pro and Enterprise have unlimited processing
     if (tier === 'pro' || tier === 'enterprise') {
       return true;
     }
-    
+
     // Free tier has daily limits
     return dailyUsage < dailyLimit;
   } catch (error) {
     console.error('Error checking processing limits:', error);
     return false;
+  }
+}
+
+async function handleSubscriptionUpgrade(data) {
+  try {
+    const { tier, billingPeriod = 'monthly' } = data;
+
+    if (!tier || !['pro', 'tnf'].includes(tier)) {
+      throw new Error('Invalid tier. Must be "pro" or "tnf"');
+    }
+
+    console.log(`🔄 Creating checkout session for ${tier} (${billingPeriod})...`);
+
+    // Call backend to create checkout session
+    const response = await apiClient.request('/subscriptions/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ tier, billingPeriod })
+    });
+
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to create checkout session');
+    }
+
+    // Open PayPal approval URL in new tab
+    const approvalUrl = response.data.approvalUrl;
+    console.log('✅ Opening PayPal checkout:', approvalUrl);
+
+    chrome.tabs.create({ url: approvalUrl });
+
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Subscription upgrade error:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to start upgrade process'
+    };
   }
 }
 
