@@ -27,16 +27,29 @@ router.get('/status', protect, async (req, res) => {
     // Prioritize subscription tier if active, otherwise fallback to user tier (which might be pro via manual grant)
     const tier = (row && row.status === 'active' && row.tier) ? row.tier : (row ? row.user_tier : 'free');
     
+    // Get feature limits based on tier
+    const features = getFeaturesByTier(tier);
+
+    // IMPORTANT: If the user record has a daily_limit that is high (like 1000 or Infinity), respect that overrides the standard tier limit
+    // This handles manual overrides in the database for specific users
+    if (row && row.daily_limit && row.daily_limit > features.dailyLimit) {
+        features.dailyLimit = row.daily_limit;
+    }
+
     const subscription = row ? { ...row, tier } : { tier: 'free' };
 
     // Get feature limits based on tier
-    const features = getFeaturesByTier(subscription.tier);
-
+    // REMOVED duplicate declaration
+ 
     res.json({
       success: true,
       data: {
         subscription,
-        features
+        features: {
+          ...features,
+          dailyUsage: row ? row.daily_usage : 0, // Pass actual usage from DB
+          dailyLimit: features.dailyLimit // Pass the resolved limit (tier-based or override)
+        }
       }
     });
   } catch (error) {
