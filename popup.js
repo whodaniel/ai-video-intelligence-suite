@@ -225,6 +225,20 @@ async function loadUserData() {
     if (subResponse.success) {
       state.subscription = subResponse.data;
       
+      // Update user limits from subscription if available (backend source of truth)
+      if (state.subscription && state.subscription.features) {
+         state.user = {
+            ...state.user,
+            dailyUsage: state.subscription.features.dailyUsage,
+            dailyLimit: state.subscription.features.dailyLimit
+         };
+         // Also save to local storage for persistence
+         await chrome.storage.local.set({
+           dailyUsage: state.subscription.features.dailyUsage,
+           dailyLimit: state.subscription.features.dailyLimit
+         });
+      }
+
       // Fallback: Check if user is in Pro accounts list (when backend unavailable)
       if (state.subscription.tier === 'free' && state.userEmail) {
         const isKnownPro = PRO_ACCOUNTS.some(account =>
@@ -234,13 +248,15 @@ async function loadUserData() {
         if (isKnownPro) {
           console.log('👑 Recognized Pro user from local list:', state.userEmail);
           state.subscription = { tier: 'pro', features: [] };
+          // If we manually recognize pro, we should likely set a high limit too
+          state.user.dailyLimit = 1000;
         }
       }
       
       updateSubscriptionUI();
     }
     
-    // Get user stats
+    // Get user stats (from updated local storage)
     const stats = await chrome.storage.local.get([
       'dailyUsage',
       'dailyLimit',
@@ -248,7 +264,8 @@ async function loadUserData() {
       'userId'
     ]);
     
-    state.user = stats;
+    // Merge stats, but don't overwrite if we just got fresh data from API
+    state.user = { ...stats, ...state.user };
     updateStatsUI();
     
     // Get user email
@@ -536,12 +553,23 @@ function updateSubscriptionUI() {
 function updateStatsUI() {
   if (!state.user) return;
   
-  elements.dailyUsage.textContent = state.user.dailyUsage || 0;
-  elements.dailyLimit.textContent = state.user.dailyLimit || 20;
+  const usage = state.user.dailyUsage !== undefined ? state.user.dailyUsage : 0;
+  let limit = state.user.dailyLimit;
+  
+  // Handle Infinity or missing limit
+  if (limit === null || limit === undefined) limit = 20;
+
+  elements.dailyUsage.textContent = usage;
+  elements.dailyLimit.textContent = (limit === Infinity || limit >= 1000000) ? '∞' : limit;
   elements.totalProcessed.textContent = `${state.user.totalProcessed || 0} videos processed`;
   
   // Update progress bar
-  const percentage = ((state.user.dailyUsage || 0) / (state.user.dailyLimit || 20)) * 100;
+  let percentage = 0;
+  if (limit === Infinity || limit >= 1000000) {
+      percentage = 0; // Infinite limit means validly 0 usage relative to capacity
+  } else {
+      percentage = (usage / limit) * 100;
+  }
   elements.usageProgress.style.width = `${Math.min(percentage, 100)}%`;
 }
 
