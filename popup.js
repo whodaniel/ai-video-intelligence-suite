@@ -13,7 +13,9 @@ let state = {
   selectedVideos: new Set(),
   processing: false,
   subscription: null,
-  user: null
+  user: null,
+  reports: [],
+  activeTab: 'queueTab'
 };
 
 // DOM elements
@@ -38,6 +40,15 @@ const elements = {
   usageProgress: document.getElementById('usageProgress'),
   upgradePrompt: document.getElementById('upgradePrompt'),
   
+  // Single video input
+  singleVideoUrl: document.getElementById('singleVideoUrl'),
+  addSingleVideoBtn: document.getElementById('addSingleVideoBtn'),
+  singleVideoPreview: document.getElementById('singleVideoPreview'),
+  previewThumb: document.getElementById('previewThumb'),
+  previewTitle: document.getElementById('previewTitle'),
+  previewChannel: document.getElementById('previewChannel'),
+  processNowBtn: document.getElementById('processNowBtn'),
+
   // Playlists
   sourcePlaylist: document.getElementById('sourcePlaylist'),
   destPlaylist: document.getElementById('destPlaylist'),
@@ -92,7 +103,16 @@ const elements = {
   
   // Modals
   subscriptionModal: document.getElementById('subscriptionModal'),
-  settingsModal: document.getElementById('settingsModal')
+  settingsModal: document.getElementById('settingsModal'),
+  
+  // History elements
+  historyTab: document.getElementById('historyTab'),
+  queueTab: document.getElementById('queueTab'),
+  historyList: document.getElementById('historyList'),
+  historyEmpty: document.getElementById('historyEmpty'),
+  refreshHistory: document.getElementById('refreshHistory'),
+  exportAllReportsBtn: document.getElementById('exportAllReportsBtn'),
+  tabBtns: document.querySelectorAll('.tab-btn:not(.dashboard-link)')
 };
 
 // Initialize popup
@@ -151,6 +171,9 @@ async function init() {
     // Set up event listeners
     setupEventListeners();
 
+    // Load initial reports to show status indicators
+    await loadReports();
+
     // Load processing state if active (for updates)
     await checkProcessingState();
 
@@ -202,11 +225,6 @@ async function checkAuthentication() {
   }
 }
 
-// Known Pro accounts (fallback when backend unavailable)
-const PRO_ACCOUNTS = [
-  'bizsynth@gmail.com',
-  'startreetv-1705@pages.plusgoogle.com'
-];
 
 // Load user data
 async function loadUserData() {
@@ -221,38 +239,36 @@ async function loadUserData() {
     const subResponse = await chrome.runtime.sendMessage({
       type: 'SUBSCRIPTION_CHECK'
     });
-    
-    if (subResponse.success) {
-      state.subscription = subResponse.data;
-      
+
+    if (subResponse.success && subResponse.data) {
+      // Backend returns { subscription: { tier, ... }, features: { dailyLimit, ... } }
+      // Normalize to a flat structure for easier access
+      const subscriptionData = subResponse.data.subscription || {};
+      const featuresData = subResponse.data.features || {};
+
+      state.subscription = {
+        tier: subscriptionData.tier || 'free',
+        features: featuresData,
+        ...subscriptionData
+      };
+
+      console.log('📊 Subscription status:', state.subscription.tier, 'Features:', featuresData);
+
       // Update user limits from subscription if available (backend source of truth)
-      if (state.subscription && state.subscription.features) {
+      if (featuresData) {
          state.user = {
             ...state.user,
-            dailyUsage: state.subscription.features.dailyUsage,
-            dailyLimit: state.subscription.features.dailyLimit
+            dailyUsage: featuresData.dailyUsage,
+            dailyLimit: featuresData.dailyLimit
          };
          // Also save to local storage for persistence
          await chrome.storage.local.set({
-           dailyUsage: state.subscription.features.dailyUsage,
-           dailyLimit: state.subscription.features.dailyLimit
+           dailyUsage: featuresData.dailyUsage,
+           dailyLimit: featuresData.dailyLimit,
+           tier: state.subscription.tier
          });
       }
 
-      // Fallback: Check if user is in Pro accounts list (when backend unavailable)
-      if (state.subscription.tier === 'free' && state.userEmail) {
-        const isKnownPro = PRO_ACCOUNTS.some(account =>
-          state.userEmail.toLowerCase().includes(account.toLowerCase()) ||
-          account.toLowerCase().includes(state.userEmail.toLowerCase())
-        );
-        if (isKnownPro) {
-          console.log('👑 Recognized Pro user from local list:', state.userEmail);
-          state.subscription = { tier: 'pro', features: [] };
-          // If we manually recognize pro, we should likely set a high limit too
-          state.user.dailyLimit = 1000;
-        }
-      }
-      
       updateSubscriptionUI();
     }
     
@@ -457,7 +473,10 @@ function renderVideoList() {
         <span class="video-duration">${formatDuration(video.duration)}</span>
       </div>
       <div class="video-info">
-        <h4 class="video-title">${escapeHtml(video.title)}</h4>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <h4 class="video-title">${escapeHtml(video.title)}</h4>
+          ${isVideoProcessed(video.id) ? '<span class="status-badge status-processed">Analyzed</span>' : ''}
+        </div>
         <p class="video-channel">${escapeHtml(video.channelTitle)}</p>
         <div class="video-meta">
           <span>${formatNumber(video.viewCount)} views</span>
@@ -728,17 +747,39 @@ function setupEventListeners() {
     const title = prompt('Enter playlist name:');
     if (title) {
       try {
+        // Show creating feedback
+        elements.createPlaylist.disabled = true;
+        elements.createPlaylist.textContent = 'Creating...';
+
         const response = await chrome.runtime.sendMessage({
           type: 'YOUTUBE_CREATE_PLAYLIST',
           data: { title, description: 'Created by AI Video Intelligence' }
         });
-        
-        if (response.success) {
+
+        if (response.success && response.data && response.data.id) {
+          console.log('Playlist created:', response.data);
+          showError(`Playlist "${title}" created successfully!`);
+
+          // Small delay to ensure YouTube API has registered the playlist
+          await new Promise(r => setTimeout(r, 1000));
+
+          // Refresh playlists and select the new one
           await loadPlaylists();
-          elements.destPlaylist.value = response.data.id;
+
+          // Set the newly created playlist as selected destination
+          if (elements.destPlaylist) {
+            elements.destPlaylist.value = response.data.id;
+          }
+        } else {
+          throw new Error(response.error || 'Unknown error creating playlist');
         }
       } catch (error) {
-        showError('Failed to create playlist');
+        console.error('Failed to create playlist:', error);
+        showError('Failed to create playlist: ' + (error.message || 'Unknown error'));
+      } finally {
+        // Reset button state
+        elements.createPlaylist.disabled = false;
+        elements.createPlaylist.textContent = '+';
       }
     }
   });
@@ -877,6 +918,163 @@ function setupEventListeners() {
   });
   
   document.getElementById('exportDataBtn')?.addEventListener('click', exportAllData);
+
+  // Single video URL input
+  elements.singleVideoUrl?.addEventListener('input', debounce(handleSingleVideoUrlInput, 500));
+  elements.singleVideoUrl?.addEventListener('paste', () => {
+    // Handle paste event immediately
+    setTimeout(() => handleSingleVideoUrlInput(), 100);
+  });
+
+  elements.addSingleVideoBtn?.addEventListener('click', addSingleVideoToQueue);
+  elements.processNowBtn?.addEventListener('click', processSingleVideoNow);
+
+  // Tabs
+  elements.tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  elements.refreshHistory?.addEventListener('click', async () => {
+    elements.refreshHistory.classList.add('spinning');
+    await loadReports();
+    elements.refreshHistory.classList.remove('spinning');
+  });
+
+  elements.exportAllReportsBtn?.addEventListener('click', exportAllReports);
+}
+
+// Tab Switching
+function switchTab(tabId) {
+  state.activeTab = tabId;
+
+  // Update button states
+  elements.tabBtns.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  });
+
+  // Update content visibility
+  elements.queueTab.classList.toggle('hidden', tabId !== 'queueTab');
+  elements.historyTab.classList.toggle('hidden', tabId !== 'historyTab');
+
+  if (tabId === 'historyTab') {
+    renderHistoryList();
+  }
+}
+
+// Check if video is processed
+function isVideoProcessed(videoId) {
+  return state.reports.some(r => r.youtube_video_id === videoId);
+}
+
+// Load reports from backend
+async function loadReports() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'REPORTS_GET',
+      data: { limit: 100 }
+    });
+
+    if (response.success && response.data) {
+      state.reports = response.data.reports || [];
+      renderHistoryList();
+      // Also re-render video list if we're in the queue tab to show status badges
+      if (state.activeTab === 'queueTab' && state.videos.length > 0) {
+        renderVideoList();
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load reports:', error);
+  }
+}
+
+// Render history list
+function renderHistoryList() {
+  if (!elements.historyList) return;
+
+  if (state.reports.length === 0) {
+    elements.historyList.classList.add('hidden');
+    elements.historyEmpty.classList.remove('hidden');
+    return;
+  }
+
+  elements.historyList.classList.remove('hidden');
+  elements.historyEmpty.classList.add('hidden');
+
+  elements.historyList.innerHTML = state.reports.map(report => `
+    <div class="history-item">
+      <div class="history-thumb">
+        <img src="https://i.ytimg.com/vi/${report.youtube_video_id}/mqdefault.jpg" alt="${report.video_title}">
+      </div>
+      <div class="history-info">
+        <h4 class="history-title">${escapeHtml(report.video_title)}</h4>
+        <div class="history-meta">
+          <span class="history-date">${new Date(report.created_at).toLocaleDateString()}</span>
+          <span class="report-badge">Report Available</span>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-ghost view-report-btn" data-report-id="${report.id}">View</button>
+    </div>
+  `).join('');
+
+  // Add handlers for view report
+  elements.historyList.querySelectorAll('.view-report-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const reportId = e.target.dataset.reportId;
+      window.open(`https://aivideointel.thenewfuse.com/reports/${reportId}`, '_blank');
+    });
+  });
+}
+
+// Export all reports as a combined file for NotebookLM
+async function exportAllReports() {
+  try {
+    if (state.reports.length === 0) {
+      showError('No reports to export');
+      return;
+    }
+
+    elements.exportAllReportsBtn.disabled = true;
+    elements.exportAllReportsBtn.textContent = 'Preparing export...';
+
+    // Fetch full content for all reports if possible, or just build from what we have
+    // For now, let's just create a combined markdown file with titles and links
+    // A better way would be to fetch all report contents, but that might be heavy
+    
+    let combinedMD = '# AI Video Analysis Reports\n\n';
+    combinedMD += `Generated on: ${new Date().toLocaleString()}\n\n`;
+    combinedMD += `---\n\n`;
+
+    state.reports.forEach(report => {
+      combinedMD += `## ${report.video_title}\n`;
+      combinedMD += `- Video ID: ${report.youtube_video_id}\n`;
+      combinedMD += `- Analysed: ${new Date(report.created_at).toLocaleString()}\n`;
+      combinedMD += `- [View Full Report](https://aivideointel.thenewfuse.com/reports/${report.id})\n\n`;
+      // If we had the content_markdown in the summary, we'd add it here
+      if (report.content_markdown) {
+         combinedMD += report.content_markdown + '\n\n';
+      }
+      combinedMD += `---\n\n`;
+    });
+
+    const dataBlob = new Blob([combinedMD], { type: 'text/markdown' });
+    const url = URL.createObjectURL(dataBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aivideointel-reports-${new Date().toISOString().split('T')[0]}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showError('Reports exported! You can now upload this file to NotebookLM.');
+
+  } catch (error) {
+    console.error('Export failed:', error);
+    showError('Failed to export reports');
+  } finally {
+    elements.exportAllReportsBtn.disabled = false;
+    elements.exportAllReportsBtn.textContent = 'Download All Reports (MD)';
+  }
 }
 
 // Start processing
@@ -958,7 +1156,7 @@ async function bulkImportToNotebookLM() {
       active: true
     });
     
-    showError(`${selectedVideoData.length} video URLs copied to clipboard. Paste them into NotebookLM.`);
+    showError(`${selectedVideoData.length} video URLs copied to clipboard. Paste them into NotebookLM. Tip: Use the 'History' tab to download full text reports!`);
   } catch (error) {
     console.error('Failed to import to NotebookLM:', error);
     showError('Failed to import. Please try again.');
@@ -1050,10 +1248,249 @@ function showError(message) {
   toast.className = 'toast toast-error';
   toast.textContent = message;
   document.body.appendChild(toast);
-  
+
   setTimeout(() => {
     toast.remove();
   }, 3000);
+}
+
+// Debounce utility
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Extract video ID from YouTube URL
+function extractVideoId(url) {
+  if (!url) return null;
+
+  // Handle various YouTube URL formats
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([^&\n?#]+)/,
+    /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+// State for single video preview
+let currentPreviewVideo = null;
+
+// Handle single video URL input
+async function handleSingleVideoUrlInput() {
+  const url = elements.singleVideoUrl?.value?.trim();
+  const videoId = extractVideoId(url);
+
+  if (!videoId) {
+    // Hide preview if no valid video ID
+    elements.singleVideoPreview?.classList.add('hidden');
+    currentPreviewVideo = null;
+    return;
+  }
+
+  try {
+    // Fetch video details
+    const response = await chrome.runtime.sendMessage({
+      type: 'YOUTUBE_GET_VIDEO_DETAILS',
+      data: { videoIds: [videoId] }
+    });
+
+    if (response.success && response.data && response.data.length > 0) {
+      const video = response.data[0];
+
+      // Store preview video for later use
+      currentPreviewVideo = {
+        id: videoId,
+        title: video.channelTitle ? `Video from ${video.channelTitle}` : 'YouTube Video',
+        channelTitle: video.channelTitle || 'Unknown Channel',
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+        duration: video.duration,
+        viewCount: video.viewCount,
+        likeCount: video.likeCount,
+        url: `https://www.youtube.com/watch?v=${videoId}`
+      };
+
+      // We need to get the title from a different API call or use a placeholder
+      // For now, fetch snippet data
+      await fetchVideoSnippet(videoId);
+
+      // Show preview
+      updateVideoPreview();
+    } else {
+      // Video not found or error
+      elements.singleVideoPreview?.classList.add('hidden');
+      currentPreviewVideo = null;
+    }
+  } catch (error) {
+    console.error('Failed to fetch video details:', error);
+    elements.singleVideoPreview?.classList.add('hidden');
+    currentPreviewVideo = null;
+  }
+}
+
+// Fetch video snippet (title, description, etc.)
+async function fetchVideoSnippet(videoId) {
+  try {
+    // Use the playlist video details endpoint which includes snippet
+    const response = await chrome.runtime.sendMessage({
+      type: 'YOUTUBE_GET_VIDEO_DETAILS',
+      data: { videoIds: [videoId] }
+    });
+
+    if (response.success && response.data && response.data.length > 0) {
+      const details = response.data[0];
+      if (currentPreviewVideo) {
+        currentPreviewVideo.channelTitle = details.channelTitle || currentPreviewVideo.channelTitle;
+        currentPreviewVideo.duration = details.duration;
+        currentPreviewVideo.viewCount = details.viewCount;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch video snippet:', error);
+  }
+}
+
+// Update video preview UI
+function updateVideoPreview() {
+  if (!currentPreviewVideo) {
+    elements.singleVideoPreview?.classList.add('hidden');
+    return;
+  }
+
+  if (elements.previewThumb) {
+    elements.previewThumb.src = currentPreviewVideo.thumbnail;
+  }
+  if (elements.previewTitle) {
+    // Try to get title, fallback to video ID
+    elements.previewTitle.textContent = currentPreviewVideo.title || `Video: ${currentPreviewVideo.id}`;
+  }
+  if (elements.previewChannel) {
+    const duration = currentPreviewVideo.duration ? formatDuration(currentPreviewVideo.duration) : '';
+    const views = currentPreviewVideo.viewCount ? formatNumber(currentPreviewVideo.viewCount) + ' views' : '';
+    elements.previewChannel.textContent = [currentPreviewVideo.channelTitle, duration, views].filter(Boolean).join(' • ');
+  }
+
+  elements.singleVideoPreview?.classList.remove('hidden');
+}
+
+// Add single video to queue
+async function addSingleVideoToQueue() {
+  if (!currentPreviewVideo) {
+    showError('Please enter a valid YouTube URL first');
+    return;
+  }
+
+  try {
+    elements.addSingleVideoBtn.disabled = true;
+    elements.addSingleVideoBtn.textContent = 'Adding...';
+
+    // Add to queue
+    await chrome.runtime.sendMessage({
+      type: 'QUEUE_ADD',
+      data: { videos: [currentPreviewVideo] }
+    });
+
+    showError(`Added "${currentPreviewVideo.title || currentPreviewVideo.id}" to queue`);
+
+    // Clear input and preview
+    if (elements.singleVideoUrl) {
+      elements.singleVideoUrl.value = '';
+    }
+    elements.singleVideoPreview?.classList.add('hidden');
+    currentPreviewVideo = null;
+
+  } catch (error) {
+    console.error('Failed to add video to queue:', error);
+    showError('Failed to add video: ' + (error.message || 'Unknown error'));
+  } finally {
+    elements.addSingleVideoBtn.disabled = false;
+    elements.addSingleVideoBtn.textContent = 'Add';
+  }
+}
+
+// Process single video immediately
+async function processSingleVideoNow() {
+  if (!currentPreviewVideo) {
+    showError('Please enter a valid YouTube URL first');
+    return;
+  }
+
+  try {
+    // Check subscription limits
+    const canProcess = await chrome.runtime.sendMessage({
+      type: 'SUBSCRIPTION_CAN_PROCESS'
+    });
+
+    if (!canProcess.success || !canProcess.data) {
+      showUpgradeModal();
+      return;
+    }
+
+    elements.processNowBtn.disabled = true;
+    elements.processNowBtn.textContent = 'Starting...';
+
+    const videoToProcess = { ...currentPreviewVideo };
+
+    // Add to queue first
+    await chrome.runtime.sendMessage({
+      type: 'QUEUE_ADD',
+      data: { videos: [videoToProcess] }
+    });
+
+    // Get processing level
+    const processingLevel = document.getElementById('processingLevel')?.value || 'ai_studio';
+
+    // Get preferences
+    const { preferences } = await chrome.storage.local.get('preferences');
+
+    // Start automation
+    showProcessingView();
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'AUTOMATION_START',
+      data: {
+        queue: [videoToProcess],
+        processingLevel: processingLevel,
+        segmentDuration: preferences?.segmentDuration || 45,
+        concurrentProcesses: preferences?.concurrentProcesses || 1
+      }
+    });
+
+    if (response.success) {
+      console.log('Single video processing started');
+
+      // Clear input and preview
+      if (elements.singleVideoUrl) {
+        elements.singleVideoUrl.value = '';
+      }
+      elements.singleVideoPreview?.classList.add('hidden');
+      currentPreviewVideo = null;
+    } else {
+      throw new Error(response.error || 'Failed to start processing');
+    }
+
+  } catch (error) {
+    console.error('Failed to process video:', error);
+    showError('Failed to process video: ' + (error.message || 'Unknown error'));
+    showMainInterface();
+  } finally {
+    elements.processNowBtn.disabled = false;
+    elements.processNowBtn.textContent = 'Process Now';
+  }
 }
 
 // Listen for messages from background

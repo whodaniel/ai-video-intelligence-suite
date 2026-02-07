@@ -138,6 +138,11 @@ class APIClient {
       })
     });
   }
+
+  async getReports(params = {}) {
+    const query = new URLSearchParams(params);
+    return this.request(`/reports?${query}`);
+  }
 }
 
 export default new APIClient();

@@ -163,6 +163,9 @@ async function handleMessage(message, sender) {
     case 'SUBSCRIPTION_UPGRADE':
       return await handleSubscriptionUpgrade(data);
 
+    case 'REPORTS_GET':
+      return await getReports(data);
+
     // Storage operations
     case 'STORAGE_GET':
       return await chrome.storage.local.get(data.keys);
@@ -289,6 +292,16 @@ async function checkSubscription() {
     console.error('Failed to check subscription:', error);
     // Fallback to free tier on error to prevent blocking usage
     return { tier: 'free' };
+  }
+}
+
+async function getReports(params = {}) {
+  try {
+    const response = await apiClient.getReports(params);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to get reports:', error);
+    throw error;
   }
 }
 

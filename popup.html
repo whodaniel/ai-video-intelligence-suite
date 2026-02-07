@@ -100,6 +100,54 @@
 
         <!-- Main Interface -->
         <div id="mainInterface" class="hidden">
+          <!-- Tab Navigation -->
+          <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="queueTab">Queue</button>
+            <button class="tab-btn" data-tab="historyTab">History</button>
+            <a href="https://aivideointel.thenewfuse.com" target="_blank" class="tab-btn dashboard-link">Dashboard ↗</a>
+          </nav>
+
+          <div id="queueTab" class="tab-content">
+            <!-- Single Video URL Input -->
+            <section class="section">
+              <div class="section-header">
+                <h3>🎥 Quick Add Video</h3>
+                <span class="info-text" style="font-size: 0.85rem; color: var(--text-muted); font-weight: normal;">
+                  Process a single video
+                </span>
+              </div>
+              <div class="single-video-input-container" style="display: flex; gap: 8px;">
+                <input
+                  type="text"
+                  id="singleVideoUrl"
+                  class="input-large"
+                  placeholder="Paste YouTube video URL..."
+                  style="flex: 1;"
+                />
+                <button
+                  id="addSingleVideoBtn"
+                  class="btn btn-primary"
+                  title="Add video to queue"
+                >
+                  Add
+                </button>
+              </div>
+              <div id="singleVideoPreview" class="video-preview hidden" style="margin-top: 8px; padding: 10px; background: rgba(99, 102, 241, 0.1); border-radius: 8px;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <img id="previewThumb" src="" alt="" style="width: 80px; border-radius: 4px;" />
+                  <div style="flex: 1; min-width: 0;">
+                    <p id="previewTitle" style="margin: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">-</p>
+                    <p id="previewChannel" style="margin: 4px 0 0; font-size: 0.85rem; color: var(--text-muted);">-</p>
+                  </div>
+                  <button id="processNowBtn" class="btn btn-success btn-sm">Process Now</button>
+                </div>
+              </div>
+            </section>
+
+            <div class="divider" style="text-align: center; margin: 16px 0; color: var(--text-muted); font-size: 0.85rem;">
+              — OR select from playlist —
+            </div>
+
           <!-- Playlist Selection -->
           <section class="section">
             <div class="section-header">
@@ -229,7 +277,43 @@
                 Export Queue
               </button>
             </div>
-          </section>
+            </div>
+          </div>
+
+          <!-- History Tab -->
+          <div id="historyTab" class="tab-content hidden">
+            <section class="section">
+              <div class="section-header">
+                <h3>📜 Processing History</h3>
+                <button id="refreshHistory" class="btn btn-icon-only" title="Refresh history">🔄</button>
+              </div>
+              <div id="historyList" class="history-list">
+                <div class="loading-state">
+                  <div class="spinner"></div>
+                  <p>Loading history...</p>
+                </div>
+              </div>
+              <div id="historyEmpty" class="empty-state hidden">
+                <div class="empty-icon">📅</div>
+                <p>No processed videos yet</p>
+                <p class="empty-hint">Start processing videos to see them here</p>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <h3>📥 Export to NotebookLM</h3>
+              </div>
+              <div class="export-options">
+                <p class="info-text">Download your AI reports to import into NotebookLM.</p>
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                  <button id="exportAllReportsBtn" class="btn btn-primary btn-large" style="flex: 1;">
+                    <span class="btn-icon">📦</span> Download All Reports (MD)
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
 
         <!-- Processing View -->
