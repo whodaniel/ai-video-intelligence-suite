@@ -44,7 +44,7 @@ function getProcessedVideos() {
     const files = fs.readdirSync(REPORTS_DIR);
     const processed = new Set();
     for (const file of files) {
-      const match = file.match(/(?:api|transcript)_(\d+)_/);
+      const match = file.match(/^(?:api|transcript|)(\d+)_/);
       if (match) processed.add(parseInt(match[1]));
     }
     return processed;

@@ -13,11 +13,11 @@ node scripts/upgrade-user.js
 
 ### Production Deployment
 
-If running on Railway or another hosted environment:
+If running on CloudRuntime or another hosted environment:
 
 ```bash
-# SSH into production or use Railway CLI
-railway run node scripts/upgrade-user.js
+# SSH into production or use CloudRuntime CLI
+cloud_runtime run node scripts/upgrade-user.js
 ```
 
 ### Manual SQL (Alternative)

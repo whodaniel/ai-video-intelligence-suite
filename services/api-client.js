@@ -1,6 +1,36 @@
 class APIClient {
   constructor() {
     this.baseURL = 'https://aivideointel.thenewfuse.com/api';
+    this.maxRetries = 3;
+    this.retryDelayMs = 2000;
+    this.retryableStatuses = [502, 503, 504];
+    this.isBackendDown = false;
+    this.lastBackendCheck = 0;
+    this.backendCheckIntervalMs = 30000;
+  }
+
+  async sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async isBackendAvailable() {
+    const now = Date.now();
+    if (this.isBackendDown && (now - this.lastBackendCheck) < this.backendCheckIntervalMs) {
+      return false;
+    }
+    try {
+      const response = await fetch(`${this.baseURL.replace('/api', '')}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      this.isBackendDown = !response.ok;
+      this.lastBackendCheck = now;
+      return response.ok;
+    } catch {
+      this.isBackendDown = true;
+      this.lastBackendCheck = now;
+      return false;
+    }
   }
 
   async request(endpoint, options = {}, retryCount = 0) {
@@ -23,11 +53,25 @@ class APIClient {
       const data = await response.json();
 
       if (!response.ok) {
-        // Handle 401 Unauthorized - token may be expired
+        if (this.retryableStatuses.includes(response.status) && retryCount < this.maxRetries) {
+          const delay = this.retryDelayMs * Math.pow(2, retryCount);
+          console.warn(`⚠️ ${response.status} from ${endpoint} - retrying in ${delay}ms (attempt ${retryCount + 1}/${this.maxRetries})`);
+          await this.sleep(delay);
+          return await this.request(endpoint, options, retryCount + 1);
+        }
+
+        if (this.retryableStatuses.includes(response.status) && retryCount >= this.maxRetries) {
+          this.isBackendDown = true;
+          this.lastBackendCheck = Date.now();
+          const err = new Error('Backend is temporarily unavailable. Please try again in a few minutes.');
+          err.isBackendDown = true;
+          err.status = response.status;
+          throw err;
+        }
+
         if (response.status === 401 && retryCount === 0) {
           console.warn('⚠️ 401 Unauthorized - JWT token may be expired');
 
-          // Try to get user profile again to refresh JWT
           const stored = await chrome.storage.local.get(['userProfile']);
           if (stored.userProfile) {
             console.log('🔄 Attempting to refresh JWT token...');
@@ -39,12 +83,10 @@ class APIClient {
                 avatarUrl: stored.userProfile.picture
               });
 
-              // Retry the original request with new token
               console.log('✅ JWT refreshed, retrying original request...');
               return await this.request(endpoint, options, retryCount + 1);
             } catch (refreshError) {
               console.error('❌ Failed to refresh JWT:', refreshError);
-              // Clear auth state
               await chrome.storage.local.set({
                 token: null,
                 isAuthenticated: false
@@ -63,8 +105,18 @@ class APIClient {
         throw new Error(data.error?.message || data.message || `API request failed: ${response.status} ${response.statusText}`);
       }
 
+      this.isBackendDown = false;
       return data;
     } catch (error) {
+      if (error.isBackendDown) throw error;
+
+      if (error.name === 'TypeError' && retryCount < this.maxRetries) {
+        const delay = this.retryDelayMs * Math.pow(2, retryCount);
+        console.warn(`⚠️ Network error on ${endpoint} - retrying in ${delay}ms (attempt ${retryCount + 1}/${this.maxRetries})`);
+        await this.sleep(delay);
+        return await this.request(endpoint, options, retryCount + 1);
+      }
+
       console.error('API Request Failed:', JSON.stringify({
         endpoint: `${this.baseURL}${endpoint}`,
         error: error.message,

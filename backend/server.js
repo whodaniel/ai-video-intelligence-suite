@@ -21,12 +21,13 @@ import webhookRoutes from './routes/webhooks.js';
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
+import { isDbAvailable } from './config/database.js';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 // Security middleware
 app.use(helmet({
@@ -93,11 +94,13 @@ app.use(cookieParser());
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
+  const dbReady = isDbAvailable();
+  res.status(dbReady ? 200 : 503).json({
+    status: dbReady ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    database: dbReady ? 'connected' : 'unavailable'
   });
 });
 

@@ -41,7 +41,7 @@ You have a functional Chrome extension with core automation but **critical gaps*
 
 **Required:**
 ```
-Railway Backend Server
+CloudRuntime Backend Server
 ├── Node.js API (Express/Hono)
 │   ├── /api/auth/google         - OAuth flow
 │   ├── /api/users/:id           - User management
@@ -59,7 +59,7 @@ Railway Backend Server
 ```
 
 **Estimated Time:** 2-3 weeks
-**Cost:** $20-50/month (Railway + Supabase)
+**Cost:** $20-50/month (CloudRuntime + Supabase)
 
 ### 2. Payment Processing (CRITICAL - 0% Complete)
 
@@ -318,7 +318,7 @@ Railway Backend Server
 **Goal:** Launch on Chrome Web Store with Free + Pro tiers
 
 **Must-Have:**
-1. ✅ Backend API server (Railway)
+1. ✅ Backend API server (CloudRuntime)
    - User authentication
    - Subscription validation
    - Usage quota tracking
@@ -394,7 +394,7 @@ Railway Backend Server
 ## Critical Path: What to Build First
 
 ### Week 1-2: Foundation
-1. Railway backend setup
+1. CloudRuntime backend setup
 2. Stripe integration
 3. User database
 4. Backend authentication
@@ -454,7 +454,7 @@ Railway Backend Server
 ### Immediate (This Week)
 1. ✅ Decide on tier strategy (Free/Pro/TNF) - **DONE ABOVE**
 2. ✅ Prioritize feature roadmap - **DONE ABOVE**
-3. ⏳ Set up Railway project
+3. ⏳ Set up CloudRuntime project
 4. ⏳ Create PostgreSQL database
 5. ⏳ Build basic authentication API
 
@@ -562,4 +562,4 @@ Focus next 3-4 weeks on building backend infrastructure and Stripe integration. 
 **Time to Market:** 3-4 weeks for MVP launch
 **Time to TNF Integration:** 2-3 months
 
-**Next Action:** Set up Railway backend this week.
+**Next Action:** Set up CloudRuntime backend this week.

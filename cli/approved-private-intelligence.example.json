@@ -1,0 +1,45 @@
+{
+  "tenantId": "super-admin-personal",
+  "workspaceId": "workspace_abc123",
+  "items": [
+    {
+      "source": {
+        "externalId": "youtube:playlist:31",
+        "sourceKind": "YOUTUBE_PLAYLIST",
+        "title": "Antigravity and Nano Banana Pro with Remik",
+        "canonicalUrl": "https://www.youtube.com/watch?v=example",
+        "storageProvider": "LOCAL_DISK",
+        "storageLocator": "/Users/example/private/report.md",
+        "freshnessScore": 98,
+        "approvalNotes": "Distilled summary approved for TNF use",
+        "metadata": {
+          "playlist": "YouTube Saved",
+          "category": "model_stack"
+        }
+      },
+      "chunks": [
+        {
+          "chunkIndex": 0,
+          "title": "Routing implications",
+          "content": "Distilled operational summary only.",
+          "summary": "Why this matters for TNF routing.",
+          "approvedForVectorization": true,
+          "approvalNotes": "Approved for storage and vectorization",
+          "metadata": {
+            "reviewedBy": "Super Admin"
+          }
+        }
+      ],
+      "actions": [
+        {
+          "externalActionId": "tnf-antigravity-routing-spike",
+          "title": "Prototype an Antigravity routing spike",
+          "description": "Map the model-routing idea into a measurable TNF experiment.",
+          "status": "PROPOSED",
+          "priority": "HIGH",
+          "confidenceScore": 88
+        }
+      ]
+    }
+  ]
+}

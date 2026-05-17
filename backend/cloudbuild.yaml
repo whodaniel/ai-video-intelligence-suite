@@ -1,0 +1,38 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/the-new-fuse-2025/tnf-services/aivi-backend:latest'
+      - '-f'
+      - 'Dockerfile'
+      - '.'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/the-new-fuse-2025/tnf-services/aivi-backend:latest'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'aivi-backend'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/the-new-fuse-2025/tnf-services/aivi-backend:latest'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+      - '--set-env-vars'
+      - 'NODE_ENV=production,PORT=8080'
+
+images:
+  - 'us-central1-docker.pkg.dev/the-new-fuse-2025/tnf-services/aivi-backend:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

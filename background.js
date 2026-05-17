@@ -895,57 +895,39 @@ async function authenticateYouTube() {
 }
 
 async function authenticateWithWebFlow() {
-  console.log('🌐 Starting Web Auth Flow with authorization code...');
+  console.log('🌐 Starting Web Auth Flow (main Google account chooser first)...');
   const manifest = chrome.runtime.getManifest();
   const clientId = manifest.oauth2.client_id;
   const redirectUri = chrome.identity.getRedirectURL();
   const scopes = encodeURIComponent(manifest.oauth2.scopes.join(' '));
 
-  // Try new authorization code flow first (for refresh tokens)
-  try {
-    console.log('📋 Attempting authorization code flow (new)...');
-    const authUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scopes}&access_type=offline&prompt=consent`;
+  const authUrl =
+    'https://accounts.google.com/o/oauth2/auth' +
+    '?client_id=' + encodeURIComponent(clientId) +
+    '&response_type=token' +
+    '&redirect_uri=' + encodeURIComponent(redirectUri) +
+    '&scope=' + scopes +
+    '&prompt=select_account' +
+    '&include_granted_scopes=true';
 
-    const redirectUrl = await chrome.identity.launchWebAuthFlow({
-      url: authUrl,
-      interactive: true
-    });
+  const redirectUrl = await chrome.identity.launchWebAuthFlow({
+    url: authUrl,
+    interactive: true
+  });
 
-    if (redirectUrl) {
-      const url = new URL(redirectUrl);
-      const code = url.searchParams.get('code');
-
-      if (code) {
-        console.log('✅ Authorization code received, exchanging for tokens...');
-        return await exchangeCodeForTokens(code);
-      }
-    }
-  } catch (codeFlowError) {
-    console.warn('⚠️ Authorization code flow failed, falling back to implicit flow:', codeFlowError.message);
-
-    // FALLBACK: Use implicit flow (old method) - works but no refresh token
-    console.log('🔄 Falling back to implicit flow (temporary)...');
-    const fallbackAuthUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}&prompt=select_account`;
-
-    const fallbackRedirectUrl = await chrome.identity.launchWebAuthFlow({
-      url: fallbackAuthUrl,
-      interactive: true
-    });
-
-    if (fallbackRedirectUrl) {
-      const params = new URLSearchParams(new URL(fallbackRedirectUrl).hash.substring(1));
-      const token = params.get('access_token');
-
-      if (token) {
-        console.log('✅ Access token received via fallback flow');
-        return await handleAuthSuccessFallback(token);
-      }
-    }
-
-    throw new Error('Both auth flows failed');
+  if (!redirectUrl) {
+    throw new Error('Web auth flow failed to return redirect URL');
   }
 
-  throw new Error('Web auth flow failed to return redirect URL');
+  const params = new URLSearchParams(new URL(redirectUrl).hash.substring(1));
+  const token = params.get('access_token');
+  if (!token) {
+    const error = params.get('error') || 'oauth_error';
+    throw new Error('OAuth flow failed: ' + error);
+  }
+
+  console.log('✅ Access token received via account chooser flow');
+  return await handleAuthSuccessFallback(token);
 }
 
 async function handleAuthSuccessFallback(token) {

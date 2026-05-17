@@ -22,7 +22,7 @@ AI Video Intelligence Suite ("we", "our", or "us") is committed to protecting yo
 
 We do not sell your personal data. We share data only with:
 
-- **Service Providers**: Google (for AI processing), PayPal (for payments), and Railway (for hosting).
+- **Service Providers**: Google (for AI processing), PayPal (for payments), and CloudRuntime (for hosting).
 - **Legal Compliance**: If required by law.
 
 ### 5. Your Rights
